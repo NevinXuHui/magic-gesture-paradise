@@ -17,7 +17,7 @@ const motionHint=ref('waiting')
 const recording=ref(false),recordedFrames=ref(0),recordedSeconds=ref(0)
 let recordingData=null
 let stream,worker,session=0,raf=0,timer=0,watchdog=0,busy=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0
-const outcomeText={win:['你赢啦！','耶！你是出拳小高手'],lose:['这次小汪赢啦','没关系，再来挑战我吧！'],draw:['平局！好有默契','再摇摇拳头，一决胜负吧！']}
+const outcomeText={win:['你赢了！','耶！你是出拳小高手'],lose:['你输了','没关系，再来挑战小汪吧！'],draw:['平局','再来一局吧！']}
 const visibleHands=computed(()=>['revealing','result'].includes(round.value.phase))
 const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
 const subtitle=computed(()=>!ready.value?'请稍等，马上就好':round.value.phase==='result'?outcomeText[round.value.outcome][1]:round.value.phase==='revealing'?'看看谁更厉害':round.value.phase==='shaking'?'选好手势，停稳亮出来！':'握拳上下摇一摇，小汪陪你玩')
@@ -178,7 +178,11 @@ function visibility(){resetInteraction();if(!document.hidden){lastResult=perform
 let mcpCleanup
 onMounted(()=>{
   // Explicit visual QA mode never starts a camera or records a real round.
-  if(previewScene){ready.value=true;debug.value=false;round.value={phase:['win','lose','draw'].includes(previewScene)?'result':previewScene,user:previewScene==='draw'?'fist':'palm',computer:previewScene==='lose'?'peace':'fist',outcome:previewScene,rounds:0};return}
+  if(previewScene){
+    ready.value=true;debug.value=false
+    const hands={win:{user:'palm',computer:'fist'},lose:{user:'peace',computer:'fist'},draw:{user:'fist',computer:'fist'}}[previewScene]||{user:null,computer:null}
+    round.value={phase:['win','lose','draw'].includes(previewScene)?'result':previewScene,...hands,outcome:previewScene,rounds:0};return
+  }
   window.addEventListener('keydown',keys);document.addEventListener('visibilitychange',visibility)
   clockId=setInterval(clockTick,80);start()
   const context=document.modelContext
@@ -193,13 +197,19 @@ onBeforeUnmount(()=>{stop();clearInterval(clockId);mcpCleanup?.();window.removeE
     <main class="game" :class="[animatePhase,round.phase==='result'?round.outcome:'']">
       <div v-if="round.phase==='result'&&round.outcome!=='draw'" class="sunburst"></div>
       <div class="sky-decor" aria-hidden="true"><span v-for="n in 6" :key="n" class="paw" :style="{'--n':n}">🐾</span><i class="cloud cloud-one"></i><i class="cloud cloud-two"></i><span class="sky-star star-one">✦</span><span class="sky-star star-two">✦</span></div>
-      <section class="status" aria-live="polite"><h1 :key="title">{{title}}</h1><p v-if="round.phase==='waiting'">握拳上下摇一摇</p></section>
+      <section class="status" aria-live="polite"><h1 :key="title"><span>{{title}}</span></h1><p v-if="round.phase==='waiting'">握拳上下摇一摇</p></section>
       <div class="arena">
         <section class="player computer" :class="{champion:round.phase==='result'&&round.outcome==='lose'}"><div class="player-label"><span class="avatar"><GameSprite kind="dog" label="机器狗"/></span>机器狗</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.computer:'fist'" :label="visibleHands?LABELS[round.computer]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.computer]:round.phase==='shaking'?'摇拳中':'等待'}}</div></section>
         <div class="versus" aria-hidden="true">VS</div>
         <section class="player human" :class="{champion:round.phase==='result'&&round.outcome==='win'}"><div class="player-label"><span class="you-avatar"><GameSprite kind="boy" label="你"/></span>你</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.user:'fist'" :label="visibleHands?LABELS[round.user]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.user]:round.phase==='shaking'?'停稳出拳':'等待摇拳'}}</div></section>
       </div>
-      <div v-if="round.phase==='result'" :key="round.rounds" class="result-effects" role="status"><template v-if="round.outcome!=='draw'"><i v-for="n in 26" :key="n" class="confetti" :style="{'--i':n}">✦</i><div class="victory-badge"><div class="crown"><GameSprite kind="crown" label="胜利皇冠"/></div><strong>WIN!</strong><div class="ribbon">{{round.outcome==='win'?'你赢了！':'机器狗赢了！'}}</div></div></template><template v-else><div class="tie-badge"><div class="tie-sparks">✦ ˙ ✦</div><strong>平局</strong><span>再来一局吧！</span></div></template></div>
+      <div v-if="round.phase==='result'" :key="round.rounds" class="result-effects" role="status">
+        <template v-if="round.outcome!=='draw'">
+          <i v-for="n in 30" :key="n" class="confetti" :style="{'--i':n}"></i>
+          <div class="victory-badge"><div class="crown"><GameSprite kind="crown" label="结算皇冠"/></div><strong>{{round.outcome==='win'?'WIN!':'LOSE'}}</strong><div class="ribbon"><span>{{round.outcome==='win'?'你赢了！':'你输了'}}</span></div></div>
+        </template>
+        <template v-else><i v-for="n in 12" :key="n" class="tie-star" :style="{'--i':n}">✦</i><div class="tie-badge"><div class="tie-sparks">✦ ˙ ✦</div><strong>平局</strong><span>再来一局吧！</span></div></template>
+      </div>
       <div v-if="!ready" class="setup-overlay"><img :src="`${base}art/dog_mascot.webp`" alt="小汪"/><h2>{{message}}</h2><p>{{error||'第一次使用时，请允许浏览器访问摄像头'}}</p><small v-if="error">请大人帮忙 · 按 R 重试</small><div v-else class="loading-dots">● ● ●</div></div>
     </main>
     <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
