@@ -56,6 +56,7 @@ function exportRecording(){
 }
 const compact=n=>Number.isFinite(n)?Math.round(n*10000)/10000:''
 const pointLine=points=>points?.map(p=>`${compact(p.x)},${compact(p.y)},${compact(p.z)}`).join(';')||''
+const handsPointLine=hands=>hands?.map(pointLine).join('/')||''
 function recordFrame({timestamp,ms,result,index,handScores,fistCandidates,before,after,trigger,shakeMotion,recognition}){
   if(!recording.value)return
   const track=target.tracks.find(t=>t.id===target.selected)
@@ -67,7 +68,7 @@ function recordFrame({timestamp,ms,result,index,handScores,fistCandidates,before
     Math.round(performance.now()-recordingData.startedPerf),compact(ms),result.landmarks.length,index,target.selected??-1,target.changed?1:0,
     before,after,motionHint.value,trigger?1:0,motion.moving?1:0,motion.stopped?1:0,compact(motion.speed),compact(motion.drift),compact(motion.range),
     recognition?.id||'',compact(recognition?.matchScore),fistCandidates.map(Boolean).map(Number).join(','),scores,categories,tracks,
-    pointLine(result.landmarks[index]),pointLine(result.worldLandmarks?.[index])
+    handsPointLine(result.landmarks),handsPointLine(result.worldLandmarks)
   ]
   recordingData.lines.push(`F|${fields.join('|')}`)
   recordedFrames.value++

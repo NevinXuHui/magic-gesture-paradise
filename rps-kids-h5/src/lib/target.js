@@ -27,7 +27,25 @@ export class MotionTarget {
     this.tracks=[...current,...old.filter(t=>!used.has(t.id)&&!current.some(c=>c.id===t.id)).map(t=>({...t,index:-1}))]
     const active=current.filter(t=>t.count>=3&&t.moving>=2&&(eligible===null||eligible[t.index])&&(!verticalOnly||Math.abs(t.vy)>Math.abs(t.vx)*.65)).sort((a,b)=>b.moving-a.moving||b.speed-a.speed)[0]
     if(active&&active.id!==this.selected&&(!locked||this.selected===null)){this.selected=active.id;this.changed=true}
-    const selectedTrack=this.tracks.find(t=>t.id===this.selected)
+    let selectedTrack=this.tracks.find(t=>t.id===this.selected)
+    // MediaPipe can briefly split one real hand into two tracks while a fist
+    // opens into scissors. During a round the player has already been chosen;
+    // if its old track disappears and exactly one hand remains, keep the round
+    // attached to that visible hand instead of passing index -1 downstream.
+    // This is deliberately not marked as `changed`: App.vue would otherwise
+    // reset the shake-stop gate and discard the just-finished gesture.
+    if(locked&&selectedTrack?.index===-1&&current.length===1){
+      const visible=current[0]
+      const distance=Math.hypot(visible.x-selectedTrack.x,visible.y-selectedTrack.y)/Math.max(visible.size,selectedTrack.size)
+      const scale=visible.size/selectedTrack.size
+      // A nearby, similarly sized hand is the detector's replacement for the
+      // same player. Do not transfer the lock to an unrelated person entering
+      // from elsewhere in the frame.
+      if(distance<1.3&&scale>.5&&scale<2){
+        this.selected=visible.id
+        selectedTrack=visible
+      }
+    }
     if(!selectedTrack){this.selected=null;return -1}
     return selectedTrack.index
   }

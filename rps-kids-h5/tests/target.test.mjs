@@ -21,6 +21,19 @@ test('select moving hand, retain at rest and across index reorder',()=>{
  assert.equal(t.update([hand(.7)],500),-1)
  assert.equal(t.update([hand(.7),hand(.14)],600),1)
 })
+test('locked round adopts the sole visible hand after detector splits the target track',()=>{
+ const t=new MotionTarget()
+ // Reproduce the trace: the locked track has just gone absent while a
+ // nearby detector track owns the only remaining visible hand.
+ t.tracks=[
+  {id:1,x:.64,y:.52,size:.12,index:-1,seen:300,count:4,moving:0,vx:0,vy:0,speed:0},
+  {id:2,x:.512,y:.52,size:.102,index:0,seen:300,count:2,moving:0,vx:0,vy:0,speed:0},
+ ]
+ t.selected=1;t.serial=2
+ assert.equal(t.update([hand(.28)],400,16/9,{locked:true}),0)
+ assert.equal(t.selected,2)
+ assert.equal(t.changed,false)
+})
 test('stationary false positive cannot acquire target; disappearance does not select idle hand',()=>{
  const t=new MotionTarget()
  for(let i=0;i<6;i++) assert.equal(t.update([hand(.7)],i*100),-1)
