@@ -205,7 +205,9 @@ onBeforeUnmount(()=>{stop();clearInterval(clockId);mcpCleanup?.();window.removeE
       </div>
       <div v-if="round.phase==='result'" :key="round.rounds" class="result-effects" role="status">
         <template v-if="round.outcome!=='draw'">
-          <i v-for="n in 30" :key="n" class="confetti" :style="{'--i':n}"></i>
+          <div class="celebration-burst" aria-hidden="true">
+            <i v-for="n in 32" :key="n" class="burst-piece" :style="{'--angle':`${n*11.25}deg`,'--distance':`${205+(n%5)*24}px`,'--delay':`${(n%8)*.025}s`}"></i>
+          </div>
           <div class="victory-badge"><div class="crown"><GameSprite kind="crown" label="结算皇冠"/></div><strong>{{round.outcome==='win'?'WIN!':'LOSE'}}</strong><div class="ribbon"><span>{{round.outcome==='win'?'你赢了！':'你输了'}}</span></div></div>
         </template>
         <template v-else><i v-for="n in 12" :key="n" class="tie-star" :style="{'--i':n}">✦</i><div class="tie-badge"><div class="tie-sparks">✦ ˙ ✦</div><strong>平局</strong><span>再来一局吧！</span></div></template>
