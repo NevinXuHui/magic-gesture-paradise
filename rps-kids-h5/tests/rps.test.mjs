@@ -7,6 +7,19 @@ function pose(flags){
  return p
 }
 const world=p=>p.map(v=>({x:(v.x-.5)*.18,y:(v.y-.7)*.18,z:v.z*.18}))
+test('visible V survives severely corrupted image depth',()=>{
+ const p=pose([1,1,0,0]);p.forEach((v,i)=>v.z=i*.2)
+ const result=rpsScores([],world(pose([0,0,0,0])),p)
+ assert.equal(result.geometrySource,'projection')
+ assert.ok(result.scores.peace>.8)
+})
+test('clear image scissors survives conflicting depth reconstruction',()=>{
+ for(const flags of [[0,0,0,0],[1,1,1,1]]){
+  const result=rpsScores([{categoryName:'Open_Palm',score:.99}],world(pose(flags)),pose([1,1,0,0]))
+  assert.equal(result.geometrySource,'image')
+  assert.ok(result.scores.peace>result.scores.fist && result.scores.peace>result.scores.palm)
+ }
+})
 test('palm requires ring and little fingers to be extended even with strong model palm',()=>{
  for(const flags of [[1,1,0,1],[1,1,1,0],[1,1,0,0]]){
   const p=pose(flags), result=rpsScores([{categoryName:'Open_Palm',score:1}],world(p),p)

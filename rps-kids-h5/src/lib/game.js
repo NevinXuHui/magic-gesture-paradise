@@ -55,7 +55,9 @@ export class ShakeStopGate {
     this.history.push({...palm,now});this.history=this.history.filter(p=>now-p.now<=motionWindowMs)
     const xs=this.history.map(p=>p.x),ys=this.history.map(p=>p.y)
     const range=this.history.length>1?Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))/size:0
-    const delta=p=>Math.sqrt(smoothed.reduce((s,v,i)=>s+(v.x-p[i].x)**2+(v.y-p[i].y)**2+(.35*(v.z-p[i].z))**2,0)/21)/size
+    // The stop gate measures palm translation, not noisy inferred fingertip
+    // depth. StillRps separately checks the full hand before accepting a pose.
+    const delta=p=>Math.sqrt([0,5,9,13,17].reduce((s,i)=>s+(smoothed[i].x-p[i].x)**2+(smoothed[i].y-p[i].y)**2,0)/5)/size
     const dt=(now-this.time)/1000
     if(!this.last||dt<=0||dt>.5){this.last=smoothed;this.anchor=smoothed;this.time=now;this.stoppedSince=null;return {moving:true,stopped:false,range}}
     const speed=delta(this.last)/dt,drift=delta(this.anchor)

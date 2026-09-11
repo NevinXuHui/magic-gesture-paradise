@@ -10,6 +10,15 @@ test('all nine outcomes and fair random mapping',()=>{
   const samples=[0xffffffff,2];assert.equal(randomHand(()=>samples.shift()),'palm')
 })
 const points=(y=0,x=0)=>Array.from({length:21},(_,i)=>({x:.4+x,y:.4+y+(i===9?.1:0),z:0}))
+test('finger depth flicker does not restart the palm stop gate',()=>{
+ const gate=new ShakeStopGate();let out
+ for(let frame=0;frame<15;frame++){
+  const p=points();for(const i of [7,8,11,12,15,16,19,20])p[i].z=frame%2?.12:-.12
+  out=gate.update({points:p,now:frame*67})
+ }
+ assert.equal(out.stopped,true)
+ assert.equal(gate.update({points:points(.08),now:15*67}).stopped,false)
+})
 test('only a vertical fist reversal starts a shake',()=>{
   const shake=new FistShake()
   for(let now=0;now<1000;now+=100)assert.equal(shake.update({points:points(),isFist:true,now}),false)

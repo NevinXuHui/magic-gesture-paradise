@@ -49,7 +49,13 @@ export function rpsScores(categories=[],world,landmarks){
   const scissors=g=>g&&(g.scissors||(Math.min(g.openness[0],g.openness[1])>.70&&Math.max(g.openness[2],g.openness[3])<.45))
   // Camera-facing fingers overlap in the image; a confident projected palm
   // must not overrule clear curled ring/little fingers in metric 3D.
+  const imageGeometry=candidates.find(([source])=>source==='image')?.[1]
+  // Normalized image landmarks still contain estimated depth. A separate XY
+  // projection recovers a visibly clear V when that depth estimate flickers.
+  const projectedGeometry=valid(landmarks)?geometryScores(landmarks.map(p=>({...p,z:0}))):null
   if(scissors(worldGeometry)) {geometry=worldGeometry;geometrySource='world'}
+  else if(imageGeometry?.scissors) {geometry=imageGeometry;geometrySource='image'}
+  else if(projectedGeometry?.scissors) {geometry=projectedGeometry;geometrySource='projection'}
   const scores=Object.fromEntries(ids.map(id=>[id,geometry?.scores[id]!=null?.85*geometry.scores[id]+.15*model[id]:model[id]]))
   // Disagreement about curled fingers is ambiguity, not evidence of a palm.
   if(candidates.some(([,g])=>scissors(g))) scores.palm=Math.min(scores.palm,.20)

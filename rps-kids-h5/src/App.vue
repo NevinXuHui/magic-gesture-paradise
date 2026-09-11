@@ -1,11 +1,14 @@
 <script setup>
 import {ref,computed,onMounted,onBeforeUnmount} from 'vue'
+import GameSprite from './components/GameSprite.vue'
 import {StillRps,rpsScores} from './lib/rps.js'
 import {MotionTarget} from './lib/target.js'
 import {GameRound,FistShake,ShakeStopGate,LABELS} from './lib/game.js'
 
 const base=import.meta.env.BASE_URL
-const video=ref(null),preview=ref(null),debug=ref(new URLSearchParams(location.search).get('debug')==='1')
+const query=new URLSearchParams(location.search)
+const previewScene=['waiting','shaking','revealing','win','lose','draw'].includes(query.get('preview'))?query.get('preview'):null
+const video=ref(null),preview=ref(null),debug=ref(query.get('debug')!=='0')
 const ready=ref(false),loading=ref(false),message=ref('正在准备摄像头…'),error=ref('')
 const settings=ref({holdMs:250,motionSpeed:1.8,maxDrift:.22,amplitude:.22})
 const engine=new GameRound(),target=new MotionTarget(),still=new StillRps(),shake=new FistShake(),shakeStop=new ShakeStopGate()
@@ -16,7 +19,7 @@ let recordingData=null
 let stream,worker,session=0,raf=0,timer=0,watchdog=0,busy=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0
 const outcomeText={win:['你赢啦！','耶！你是出拳小高手'],lose:['这次小汪赢啦','没关系，再来挑战我吧！'],draw:['平局！好有默契','再摇摇拳头，一决胜负吧！']}
 const visibleHands=computed(()=>['revealing','result'].includes(round.value.phase))
-const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?(motionHint.value==='moving'?'摇拳中…':motionHint.value==='ending'?'停稳，亮出手势！':'保持手势…'):'摇摇拳头，来一局！')
+const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
 const subtitle=computed(()=>!ready.value?'请稍等，马上就好':round.value.phase==='result'?outcomeText[round.value.outcome][1]:round.value.phase==='revealing'?'看看谁更厉害':round.value.phase==='shaking'?'选好手势，停稳亮出来！':'握拳上下摇一摇，小汪陪你玩')
 const animatePhase=computed(()=>ready.value?round.value.phase:'waiting')
 const phaseNames={moving:'手在移动',settling:'等待停稳',recognized:'已确认',unclear:'手型不明确',no_hand:'等待主手',multiple:'检测到多手'}
@@ -123,7 +126,7 @@ function receive({result,ms,timestamp}){
   let recognition=null,trigger=false,shakeMotion=null
   const before=engine.phase
   if(before==='waiting'){
-    const scores=rpsScores(categories,world,p).scores
+    const scores=handScores[index]||{fist:0,peace:0,palm:0}
     const isFist=scores.fist>.30&&scores.fist>scores.peace&&scores.fist>scores.palm
     // MotionTarget has already observed consecutive vertical motion from a
     // fist-like hand.  Starting here avoids asking the child to perform a
@@ -144,7 +147,7 @@ function receive({result,ms,timestamp}){
   if(before==='waiting'&&round.value.phase==='shaking'){still.reset();shake.reset();shakeStop.reset();motionHint.value='moving'}
   if(before!=='waiting'&&round.value.phase==='waiting'){target.reset();still.reset();shake.reset();shakeStop.reset();motionHint.value='waiting'}
   const gamePhase=shakeMotion?.moving?'继续摇拳中':shakeMotion&&!shakeMotion.stopped?'等待摇拳结束':recognition?phaseNames[recognition.phase]:null
-  diagnostic.value={...diagnostic.value,hands:result.landmarks.length,index,ms,gesture:recognition?.id?LABELS[recognition.id]||'—':trigger?'摇拳已触发':'—',phase:gamePhase||(p?'主手已锁定，等待摇拳':'上下摇拳来锁定主手'),match:recognition?.matchScore||0,raw:categories,round:round.value}
+  diagnostic.value={...diagnostic.value,scores:handScores[index]||handScores[0],motion:shakeMotion,hands:result.landmarks.length,index,ms,gesture:recognition?.id?LABELS[recognition.id]||'—':trigger?'摇拳已触发':'—',phase:gamePhase||(p?'主手已锁定，等待摇拳':'上下摇拳来锁定主手'),match:recognition?.matchScore||0,raw:categories,round:round.value}
   if(elapsed>=1000){diagnostic.value.fps=fpsCount*1000/elapsed;fpsSince=lastResult;fpsCount=0}
   recordFrame({timestamp,ms,result,index,handScores,fistCandidates,before,after:round.value.phase,trigger,shakeMotion,recognition})
   draw(result.landmarks,index)
@@ -154,7 +157,7 @@ function draw(hands,selected){
   if(!debug.value||!preview.value)return
   const canvas=preview.value;canvas.width=video.value.videoWidth;canvas.height=video.value.videoHeight
   const ctx=canvas.getContext('2d');ctx.translate(canvas.width,0);ctx.scale(-1,1);ctx.drawImage(video.value,0,0,canvas.width,canvas.height)
-  hands.forEach((p,index)=>{if(index!==selected)return;ctx.lineWidth=3;ctx.strokeStyle='#f8ef5f';ctx.fillStyle=ctx.strokeStyle
+  hands.forEach((p,index)=>{ctx.lineWidth=index===selected?3:1;ctx.strokeStyle=index===selected?'#f8ef5f':'#80cfff';ctx.fillStyle=ctx.strokeStyle
     edges.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(p[a].x*canvas.width,p[a].y*canvas.height);ctx.lineTo(p[b].x*canvas.width,p[b].y*canvas.height);ctx.stroke()})
     p.forEach(v=>{ctx.beginPath();ctx.arc(v.x*canvas.width,v.y*canvas.height,3,0,Math.PI*2);ctx.fill()})
   })
@@ -174,6 +177,8 @@ function keys(e){
 function visibility(){resetInteraction();if(!document.hidden){lastResult=performance.now();fpsSince=lastResult;fpsCount=0}}
 let mcpCleanup
 onMounted(()=>{
+  // Explicit visual QA mode never starts a camera or records a real round.
+  if(previewScene){ready.value=true;debug.value=false;round.value={phase:['win','lose','draw'].includes(previewScene)?'result':previewScene,user:previewScene==='draw'?'fist':'palm',computer:previewScene==='lose'?'peace':'fist',outcome:previewScene,rounds:0};return}
   window.addEventListener('keydown',keys);document.addEventListener('visibilitychange',visibility)
   clockId=setInterval(clockTick,80);start()
   const context=document.modelContext
@@ -186,15 +191,19 @@ onBeforeUnmount(()=>{stop();clearInterval(clockId);mcpCleanup?.();window.removeE
   <div class="viewport">
     <video class="capture-video" ref="video" autoplay muted playsinline aria-hidden="true"></video>
     <main class="game" :class="[animatePhase,round.phase==='result'?round.outcome:'']">
+      <div v-if="round.phase==='result'&&round.outcome!=='draw'" class="sunburst"></div>
+      <div class="sky-decor" aria-hidden="true"><span v-for="n in 6" :key="n" class="paw" :style="{'--n':n}">🐾</span><i class="cloud cloud-one"></i><i class="cloud cloud-two"></i><span class="sky-star star-one">✦</span><span class="sky-star star-two">✦</span></div>
       <section class="status" aria-live="polite"><h1 :key="title">{{title}}</h1><p v-if="round.phase==='waiting'">握拳上下摇一摇</p></section>
       <div class="arena">
-        <section class="player computer" :class="{champion:round.phase==='result'&&round.outcome==='lose'}"><div class="player-label"><img :src="`${base}art/dog_mascot.webp`" alt="" class="avatar" />小汪</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><img :src="`./art/${visibleHands?round.computer:'fist'}.svg`" :alt="visibleHands?LABELS[round.computer]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.computer]:round.phase==='shaking'?'摇拳中':'等待'}}</div></section>
+        <section class="player computer" :class="{champion:round.phase==='result'&&round.outcome==='lose'}"><div class="player-label"><span class="avatar"><GameSprite kind="dog" label="机器狗"/></span>机器狗</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.computer:'fist'" :label="visibleHands?LABELS[round.computer]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.computer]:round.phase==='shaking'?'摇拳中':'等待'}}</div></section>
         <div class="versus" aria-hidden="true">VS</div>
-        <section class="player human" :class="{champion:round.phase==='result'&&round.outcome==='win'}"><div class="player-label"><span class="you-avatar">★</span>你</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><img :src="`./art/${visibleHands?round.user:'fist'}.svg`" :alt="visibleHands?LABELS[round.user]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.user]:round.phase==='shaking'?'停稳出拳':'等待摇拳'}}</div></section>
+        <section class="player human" :class="{champion:round.phase==='result'&&round.outcome==='win'}"><div class="player-label"><span class="you-avatar"><GameSprite kind="boy" label="你"/></span>你</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.user:'fist'" :label="visibleHands?LABELS[round.user]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.user]:round.phase==='shaking'?'停稳出拳':'等待摇拳'}}</div></section>
       </div>
-      <div v-if="round.phase==='result'" :key="round.rounds" class="result-effects" aria-hidden="true"><template v-if="round.outcome==='win'"><i v-for="n in 26" :key="n" class="confetti" :style="{'--i':n}">✦</i><div class="award">★</div></template><template v-else-if="round.outcome==='lose'"><div class="encourage">加油！<span>下次一定行</span></div><i v-for="n in 6" :key="n" class="cheer-star" :style="{'--i':n}">★</i></template><template v-else><div class="draw-rings"><i></i><i></i><strong>默契满分</strong></div></template></div>
+      <div v-if="round.phase==='result'" :key="round.rounds" class="result-effects" role="status"><template v-if="round.outcome!=='draw'"><i v-for="n in 26" :key="n" class="confetti" :style="{'--i':n}">✦</i><div class="victory-badge"><div class="crown"><GameSprite kind="crown" label="胜利皇冠"/></div><strong>WIN!</strong><div class="ribbon">{{round.outcome==='win'?'你赢了！':'机器狗赢了！'}}</div></div></template><template v-else><div class="tie-badge"><div class="tie-sparks">✦ ˙ ✦</div><strong>平局</strong><span>再来一局吧！</span></div></template></div>
       <div v-if="!ready" class="setup-overlay"><img :src="`${base}art/dog_mascot.webp`" alt="小汪"/><h2>{{message}}</h2><p>{{error||'第一次使用时，请允许浏览器访问摄像头'}}</p><small v-if="error">请大人帮忙 · 按 R 重试</small><div v-else class="loading-dots">● ● ●</div></div>
     </main>
-    <aside v-show="debug" class="debug-panel"><div class="debug-heading"><strong>摄像头调试</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色骨架：当前锁定的摇拳主手</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
+    <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
+    <button v-else-if="!debug" class="debug-open" @click="debug=true">摄像头调试 · D</button>
+    <aside v-show="debug" class="debug-panel"><div class="debug-heading"><strong>摄像头调试</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
   </div>
 </template>
