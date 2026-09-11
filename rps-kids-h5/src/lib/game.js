@@ -69,13 +69,22 @@ export class ShakeStopGate {
 }
 
 export class GameRound {
-  constructor({choose=randomHand,revealMs=420,resultMs=2200,minShakeMs=850,timeoutMs=10000}={}){
+  constructor({choose=randomHand,revealMs=420,resultMs=1200,minShakeMs=850,timeoutMs=10000}={}){
     Object.assign(this,{choose,revealMs,resultMs,minShakeMs,timeoutMs});this.rounds=0;this.reset()
   }
-  reset(){this.phase='waiting';this.computer=null;this.user=null;this.outcome=null;this.since=0;this.lastHand=null}
+  reset(){this.phase='waiting';this.computer=null;this.user=null;this.outcome=null;this.since=0;this.lastHand=null;this.pendingShake=false}
   update({now,shake=false,recognized=null,handPresent=true}={}){
     if(this.phase==='revealing'&&now-this.since>=this.revealMs){this.phase='result';this.since=now}
-    else if(this.phase==='result'&&now-this.since>=this.resultMs){this.reset();return this.snapshot()}
+    else if(this.phase==='result'){
+      if(shake)this.pendingShake=true
+      if(now-this.since>=this.resultMs){
+        if(this.pendingShake&&handPresent){
+          this.phase='shaking';this.computer=this.choose();this.since=now;this.lastHand=now;this.pendingShake=false
+          return this.snapshot()
+        }
+        this.reset();return this.snapshot()
+      }
+    }
     if(this.phase==='waiting'&&shake){
       this.phase='shaking';this.computer=this.choose();this.since=now;this.lastHand=now
     } else if(this.phase==='shaking'){

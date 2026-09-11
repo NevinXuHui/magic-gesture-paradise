@@ -142,6 +142,10 @@ function receive({result,ms,timestamp}){
       motionHint.value=shakeMotion.moving?'moving':'ending'
       still.reset()
     }
+  }else if(before==='result'){
+    const scores=handScores[index]||{fist:0,peace:0,palm:0}
+    const isFist=scores.fist>.30&&scores.fist>scores.peace&&scores.fist>scores.palm
+    trigger=shake.update({points:p,isFist,now:timestamp,amplitude:settings.value.amplitude})
   }
   round.value=engine.update({now:timestamp,shake:trigger,recognized:recognition,handPresent:!!p})
   if(before!==round.value.phase)logEvent('phase_changed',`${before}->${round.value.phase}`)
