@@ -9,3 +9,10 @@
 **/._*
 coverage/
 .ppt-editable-build/
+
+# Python
+**/*.pyc
+**/*.pyo
+**/__pycache__/
+*.py[cod]
+*$py.class
