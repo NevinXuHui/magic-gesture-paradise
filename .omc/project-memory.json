@@ -1,0 +1,358 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1789874596773,
+  "projectRoot": "/Volumes/mine/Code/ROS/dice/手势识别",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 0,
+      "lastAccessed": 1789874596731,
+      "keyFiles": []
+    },
+    "dog-h5-gesture": {
+      "path": "dog-h5-gesture",
+      "purpose": null,
+      "fileCount": 17,
+      "lastAccessed": 1789874596736,
+      "keyFiles": [
+        "DOG_DEPLOYMENT.md",
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "dog-h5-gesture-deploy.tar.gz",
+        "gesture-fingers-update.tar.gz"
+      ]
+    },
+    "dog-pc-gestrue": {
+      "path": "dog-pc-gestrue",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1789874596737,
+      "keyFiles": [
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "index.html",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    "rps-kids-h5": {
+      "path": "rps-kids-h5",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1789874596739,
+      "keyFiles": [
+        "README.md",
+        "index.html",
+        "package-lock.json",
+        "package.json",
+        "start-local.sh"
+      ]
+    },
+    "smartapp-runtime": {
+      "path": "smartapp-runtime",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1789874596740,
+      "keyFiles": [
+        "README.md",
+        "pyproject.toml"
+      ]
+    },
+    "智能应用-小游戏整体技术方案设计_终稿.assets": {
+      "path": "智能应用-小游戏整体技术方案设计_终稿.assets",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1789874596740,
+      "keyFiles": [
+        "figure-01.png",
+        "figure-02.png",
+        "figure-03.png"
+      ]
+    },
+    "dog-h5-gesture/dist": {
+      "path": "dog-h5-gesture/dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 4,
+      "lastAccessed": 1789874596742,
+      "keyFiles": [
+        "MODEL_INFO.json",
+        "index.html",
+        "inference-worker.js"
+      ]
+    },
+    "dog-pc-gestrue/dist": {
+      "path": "dog-pc-gestrue/dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 3,
+      "lastAccessed": 1789874596742,
+      "keyFiles": [
+        "MODEL_INFO.json",
+        "index.html",
+        "inference-worker.js"
+      ]
+    },
+    "dog-pc-gestrue/node_modules": {
+      "path": "dog-pc-gestrue/node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 1,
+      "lastAccessed": 1789874596743,
+      "keyFiles": []
+    },
+    "dog-pc-gestrue/public": {
+      "path": "dog-pc-gestrue/public",
+      "purpose": "Public files",
+      "fileCount": 2,
+      "lastAccessed": 1789874596743,
+      "keyFiles": [
+        "MODEL_INFO.json",
+        "inference-worker.js"
+      ]
+    },
+    "dog-pc-gestrue/scripts": {
+      "path": "dog-pc-gestrue/scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1789874596743,
+      "keyFiles": [
+        "copy-assets.mjs"
+      ]
+    },
+    "rps-kids-h5/dist": {
+      "path": "rps-kids-h5/dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 3,
+      "lastAccessed": 1789874596745,
+      "keyFiles": [
+        "MODEL_INFO.json",
+        "index.html",
+        "inference-worker.js"
+      ]
+    },
+    "rps-kids-h5/node_modules": {
+      "path": "rps-kids-h5/node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 2,
+      "lastAccessed": 1789874596748,
+      "keyFiles": []
+    },
+    "rps-kids-h5/public": {
+      "path": "rps-kids-h5/public",
+      "purpose": "Public files",
+      "fileCount": 2,
+      "lastAccessed": 1789874596752,
+      "keyFiles": [
+        "MODEL_INFO.json",
+        "inference-worker.js"
+      ]
+    },
+    "rps-kids-h5/scripts": {
+      "path": "rps-kids-h5/scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1789874596756,
+      "keyFiles": [
+        "copy-assets.mjs"
+      ]
+    },
+    "smartapp-runtime/config": {
+      "path": "smartapp-runtime/config",
+      "purpose": "Configuration files",
+      "fileCount": 2,
+      "lastAccessed": 1789874596764,
+      "keyFiles": [
+        "runtime.example.toml",
+        "smartapp-runtime.service"
+      ]
+    },
+    "smartapp-runtime/examples": {
+      "path": "smartapp-runtime/examples",
+      "purpose": "Example code",
+      "fileCount": 1,
+      "lastAccessed": 1789874596765,
+      "keyFiles": [
+        "agent_client.py"
+      ]
+    },
+    "smartapp-runtime/scripts": {
+      "path": "smartapp-runtime/scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1789874596769,
+      "keyFiles": [
+        "check.sh"
+      ]
+    },
+    "smartapp-runtime/src": {
+      "path": "smartapp-runtime/src",
+      "purpose": "Source code",
+      "fileCount": 0,
+      "lastAccessed": 1789874596771,
+      "keyFiles": []
+    },
+    "smartapp-runtime/tests": {
+      "path": "smartapp-runtime/tests",
+      "purpose": "Test files",
+      "fileCount": 0,
+      "lastAccessed": 1789874596773,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1789721149862,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/README.md",
+      "accessCount": 1,
+      "lastAccessed": 1789874625355,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/pyproject.toml",
+      "accessCount": 1,
+      "lastAccessed": 1789874630823,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/scripts/check.sh",
+      "accessCount": 1,
+      "lastAccessed": 1789874641043,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/config/runtime.example.toml",
+      "accessCount": 1,
+      "lastAccessed": 1789874976550,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/run.sh",
+      "accessCount": 1,
+      "lastAccessed": 1789875028452,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/test_client.sh",
+      "accessCount": 1,
+      "lastAccessed": 1789875238439,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime.egg-info/PKG-INFO",
+      "accessCount": 1,
+      "lastAccessed": 1789875417207,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime/domain/commands.py",
+      "accessCount": 1,
+      "lastAccessed": 1789875532681,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime/domain/errors.py",
+      "accessCount": 1,
+      "lastAccessed": 1789875533686,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime/application/coordinator.py",
+      "accessCount": 1,
+      "lastAccessed": 1789875534712,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime/ports/renderer.py",
+      "accessCount": 1,
+      "lastAccessed": 1789875538820,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime/infrastructure/packages/installer.py",
+      "accessCount": 1,
+      "lastAccessed": 1789875539709,
+      "type": "file"
+    },
+    {
+      "path": "smartapp-runtime/src/smartapp_runtime/infrastructure/ipc/server.py",
+      "accessCount": 1,
+      "lastAccessed": 1789875540748,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/README.md",
+      "accessCount": 1,
+      "lastAccessed": 1789876042134,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/src/App.vue",
+      "accessCount": 1,
+      "lastAccessed": 1789876047714,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/src/lib/gestures.js",
+      "accessCount": 1,
+      "lastAccessed": 1789876048618,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/public/inference-worker.js",
+      "accessCount": 1,
+      "lastAccessed": 1789876049667,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/src/lib/rps.js",
+      "accessCount": 1,
+      "lastAccessed": 1789876055278,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/src/lib/target.js",
+      "accessCount": 1,
+      "lastAccessed": 1789876055961,
+      "type": "file"
+    },
+    {
+      "path": "dog-h5-gesture/package.json",
+      "accessCount": 1,
+      "lastAccessed": 1789876056624,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
