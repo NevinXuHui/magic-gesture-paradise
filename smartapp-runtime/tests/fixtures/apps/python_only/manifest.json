@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "appId": "python_only",
+  "version": "1",
+  "web": {"enabled": false, "entry": "index.html"},
+  "backend": {"enabled": true, "entry": "main.py", "dynamicService": false},
+  "routing": {"defaultTarget": "python"}
+}

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "appId": "hybrid",
+  "version": "1",
+  "web": {"enabled": true, "entry": "index.html"},
+  "backend": {"enabled": true, "entry": "main.py", "dynamicService": false},
+  "routing": {"defaultTarget": "python"}
+}

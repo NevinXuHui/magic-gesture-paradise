@@ -1,0 +1,98 @@
+# SmartApp Runtime 本地开发配置。所有可接受键均在此显式列出。
+# 运行前请确认 root 的最近已存在父目录可写。
+
+[paths]
+root = "/tmp/smartapp-runtime"
+socket = "/tmp/smartapp-runtime/run/runtime.sock"
+log = "/tmp/smartapp-runtime/logs/runtime.jsonl"
+python_executable = "/usr/bin/python3"
+
+[network]
+# 只允许回环 IP 字面量；不接受主机名、0.0.0.0 或端口 0。
+static_host = "127.0.0.1"
+static_port = 18080
+backend_host = "127.0.0.1"
+backend_port = 18081
+
+[timeouts]
+download = 60.0
+startup = 15.0
+graceful_stop = 3.0
+sigterm = 3.0
+renderer = 15.0
+
+[limits]
+max_package_bytes = 536870912
+max_file_bytes = 536870912
+max_unpacked_bytes = 1073741824
+max_files = 10000
+max_path_length = 240
+max_message_bytes = 1048576
+max_queue_messages = 128
+max_queue_bytes = 4194304
+
+[process]
+env_passthrough = ["PATH", "LANG", "LC_ALL", "ROS_DOMAIN_ID", "RMW_IMPLEMENTATION"]
+protocol_violation_limit = 5
+
+[renderer]
+# fake 仅用于本地开发/自动化，不会启动 Electron 或浏览器。
+kind = "fake"
+load_argv = []
+send_argv = []
+stop_argv = []
+restore_argv = []
+
+[logging]
+level = "INFO"
+target = "stderr"
+
+# 生产配置示例（复制到独立文件后取消注释，并按目标机实际路径调整）：
+#
+# [paths]
+# root = "/data/smartapp"
+# socket = "/data/smartapp/run/runtime.sock"
+# log = "/data/smartapp/logs/runtime.jsonl"
+# python_executable = "/usr/bin/python3"
+#
+# [network]
+# static_host = "127.0.0.1"
+# static_port = 18080
+# backend_host = "127.0.0.1"
+# backend_port = 18081
+#
+# [timeouts]
+# download = 60.0
+# startup = 15.0
+# graceful_stop = 3.0
+# sigterm = 3.0
+# renderer = 15.0
+#
+# [limits]
+# max_package_bytes = 536870912
+# max_file_bytes = 536870912
+# max_unpacked_bytes = 1073741824
+# max_files = 10000
+# max_path_length = 240
+# max_message_bytes = 1048576
+# max_queue_messages = 128
+# max_queue_bytes = 4194304
+#
+# [process]
+# env_passthrough = ["PATH", "LANG", "LC_ALL", "ROS_DOMAIN_ID", "RMW_IMPLEMENTATION"]
+# protocol_violation_limit = 5
+#
+# [renderer]
+# kind = "command"
+# load_argv = ["/usr/local/bin/smartapp-renderer", "load", "{url}", "--session", "{session_id}", "--app", "{app_id}", "--version", "{version}"]
+# send_argv = ["/usr/local/bin/smartapp-renderer", "send", "--session", "{session_id}"]
+# stop_argv = ["/usr/local/bin/smartapp-renderer", "stop-current"]
+# restore_argv = ["/usr/local/bin/smartapp-renderer", "restore-default"]
+#
+# [logging]
+# level = "INFO"
+# target = "file"
+#
+# Renderer 命令是 argv 数组，不经 shell。load/send 可使用
+# {url}/{session_id}/{app_id}/{version}，占位符必须独占一个 argv 元素。
+# stop/restore 不得使用任何会话占位符。send 通过 stdin 接收一行 JSON。

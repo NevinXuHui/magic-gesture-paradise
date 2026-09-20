@@ -1,0 +1,25 @@
+[Unit]
+Description=SmartApp Runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 安装时创建独立的非 root 用户/组，并确保 /data/smartapp 归它所有。
+User=smartapp
+Group=smartapp
+UMask=0007
+# 下列 /opt 和 /etc 路径是部署占位，必须按实际安装位置调整。
+WorkingDirectory=/opt/smartapp-runtime
+ExecStart=/opt/smartapp-runtime/.venv/bin/python -m smartapp_runtime --config /etc/smartapp-runtime/runtime.toml
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=60s
+# 先只向主进程发 SIGTERM，留出 Runtime 回收后端进程组的时间；
+# 超时后 systemd 再向整个 control group 发 SIGKILL。
+KillMode=mixed
+SendSIGKILL=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,7 @@
 - `dog-h5-gesture`：实时手势识别 H5，包含多手势识别、主手跟踪与调试工具。
 - `dog-pc-gestrue`：桌面网页版本的手势识别实验项目。
 - `rps-kids-h5`：面向 800 × 480 屏幕的儿童剪刀石头布小游戏，支持摇拳触发、停稳识别、输赢动画与轨迹日志。
+- `smartapp-runtime`：SmartApp 应用包、会话、Web/后端生命周期与 Agent JSONL 通信运行时，详见 [SmartApp Runtime 文档](smartapp-runtime/README.md)。
 
 各项目的运行、构建及部署说明见对应目录内的 `README.md`。
 
