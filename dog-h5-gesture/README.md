@@ -50,10 +50,10 @@ npm run build
 ```bash
 sudo snap install chromium
 cd ~/gesture-lab/dist
-python3 -m http.server 8080 --bind 127.0.0.1
+python3 -m http.server 8090 --bind 0.0.0.0
 ```
 
-**在板子自己的浏览器**打开 `http://localhost:8080`，此时读取的是板子连接的摄像头。Snap 版 Chromium 如果无法访问摄像头，可检查并连接 camera 接口：
+**在板子自己的浏览器**打开 `http://localhost:8090`，此时读取的是板子连接的摄像头。Snap 版 Chromium 如果无法访问摄像头,可检查并连接 camera 接口：
 
 ```bash
 snap connections chromium
