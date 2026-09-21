@@ -9,7 +9,8 @@ const base=import.meta.env.BASE_URL
 const query=new URLSearchParams(location.search)
 const previewScene=['waiting','shaking','revealing','win','lose','draw'].includes(query.get('preview'))?query.get('preview'):null
 const useServerCamera=query.get('camera')==='server'||query.get('server')==='1'
-const video=ref(null),preview=ref(null),debug=ref(query.get('debug')!=='0'||useServerCamera)
+const screenMode=query.get('screen')==='1'
+const video=ref(null),preview=ref(null),debug=ref(!screenMode&&query.get('debug')!=='0')
 const ready=ref(false),loading=ref(false),message=ref('正在准备摄像头…'),error=ref('')
 const settings=ref({holdMs:250,motionSpeed:1.8,maxDrift:.22,amplitude:.22})
 const engine=new GameRound(),target=new MotionTarget(),still=new StillRps(),shake=new FistShake(),shakeStop=new ShakeStopGate()
@@ -268,7 +269,7 @@ onBeforeUnmount(()=>{stop();clearInterval(clockId);mcpCleanup?.();window.removeE
       <div v-if="!ready" class="setup-overlay"><img :src="`${base}art/dog_mascot.webp`" alt="小汪"/><h2>{{message}}</h2><p>{{error||'第一次使用时，请允许浏览器访问摄像头'}}</p><small v-if="error">请大人帮忙 · 按 R 重试</small><div v-else class="loading-dots">● ● ●</div></div>
     </main>
     <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
-    <button v-else-if="!debug" class="debug-open" @click="debug=true">摄像头调试 · D</button>
+    <button v-else-if="!debug&&!screenMode" class="debug-open" @click="debug=true">摄像头调试 · D</button>
     <aside class="debug-panel" :style="{display: debug ? 'block' : 'none'}"><div class="debug-heading"><strong>摄像头调试</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
   </div>
 </template>
