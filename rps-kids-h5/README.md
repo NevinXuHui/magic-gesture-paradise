@@ -1,66 +1,86 @@
-# 拳拳超人 · 和小汪玩剪刀石头布
+# 拳拳超人：剪刀石头布
 
-800 × 480 固定横屏 H5，居中显示，周围空间保留为深色边距。Vue 3 + Element Plus，Mac 摄像头在本机识别，模型及字体均随包提供，无音效。参考 dog-h5-gesture 的识别与主手跟踪代码，复用 English 的画布尺寸及小汪素材。
+面向儿童的 800 x 480 手势识别 H5 游戏。前端使用 Vue 3 和 MediaPipe Tasks Vision，在浏览器 Worker 中完成剪刀、石头、布识别。
 
-## 运行
+正式部署采用 SmartApp Runtime 的 `Web+Python` Hybrid 应用模式：
 
-### 方式 1：浏览器本地摄像头（默认）
-
-构建后的版本：运行 `bash start-local.sh`，在 Chrome 打开 http://localhost:5174/ （HTTPS）或 https://localhost:5174/ （HTTPS）。首次由管理员允许摄像头，之后孩子无需触摸屏幕。不要直接双击 index.html；摄像头需要本机 HTTP 或 HTTPS 环境。
-
-### 方式 2：服务端摄像头（机器狗/USB 摄像头）
-
-运行 `bash start-server.sh`，在任意设备浏览器打开：
-- **本机**：http://localhost:5174/?camera=server
-- **局域网**：http://192.168.123.99:5174/?camera=server
-
-摄像头优先级：
-1. 机器狗额头相机（如果 `/tmp/foo_jpeg` 共享流存在）
-2. USB 摄像头 `/dev/video0`
-
-**特点**：无需浏览器摄像头权限，使用服务器端摄像头，支持远程访问。
-
-### 方式 3：机器狗实体屏
-
-机器狗设备上安装 Electron、FFmpeg、MPV 后，运行：
-
-```bash
-cd /home/unitree/rps-kids-h5
-npm run build
-bash start-screen.sh
+```text
+SmartApp Runtime :18080
+        |
+        v
+      H5 页面 ----------------------+
+        |                           |
+        | JPEG                      | MediaPipe WASM
+        v                           v
+backend/main.py :18081 -> 摄像头共享流 -> 游戏识别与交互
 ```
 
-该脚本会复用或启动 `server.py`，按机器狗现有液晶框架启动 `Xvfb + Electron Offscreen`，再经 FFmpeg 输出 `transpose=2` 的 BGRA NUT FIFO，最后通过设备已有的 `/tmp/mpv-socket` 接管液晶。它不会另起一个 MPV 进程直接抢 DRM，避免与表情显示链路冲突。实体屏模式默认隐藏调试面板，摄像头仍使用机器狗服务端 `/api/frame`。
+Runtime 负责应用安装、静态服务、backend 生命周期和实体屏显示。Electron、FFmpeg、MPV 和表情恢复实现已经迁移到 `smartapp-runtime/renderer/`，不再由 H5 项目或应用包启动。
 
-设备需要已有的 `/tmp/mpv-socket`。首次运行缺少 `Xvfb`、`ffmpeg` 或 `socat` 时，脚本会在 Debian/Ubuntu 上自动通过 `apt-get` 安装；可设置 `AUTO_INSTALL_DEPS=0` 关闭。也可通过环境变量覆盖工具路径和显示参数：`ELECTRON_BIN`、`FFMPEG_BIN`、`XVFB_BIN`、`SOCAT_BIN`、`MPV_SOCKET`、`SCREEN_DISPLAY`、`SCREEN_RUNTIME_DIR`、`PORT`、`SCREEN_FPS`、`SCREEN_URL`。
+## 本地开发
 
-开发：`npm ci`、`npm run dev -- --port 5174`。测试 `npm test`，构建 `npm run build`。开发与静态服务勿同时占用相同端口。
+```bash
+npm ci
+npm run dev -- --port 5174
+```
 
-## 怎么玩
+打开 `http://localhost:5174/`，由浏览器使用本机摄像头。首次访问需要允许摄像头权限。
 
-1. 握拳上下摇动，完成一次有幅度的往返。刚进入画面时可多摇一下，让系统锁定主手。
-2. 两侧开始摇拳动画。摆出剪刀、石头或布，停稳片刻后一起亮牌。
-3. 胜利播放星星彩纸，失败播放鼓励动画，平局播放默契双环。约 2.2 秒后自动等待下一轮，再摇拳即可开始。
+生产构建和本地静态预览：
 
-电脑在摇拳触发时用浏览器加密随机数选好手势，三种等概率，不依据用户手势调整。手离开超过 1.2 秒或一轮等待超过 10 秒会取消；一直保持静止不会重复开启回合。
+```bash
+npm run build
+./start-local.sh
+```
 
-## 调试
+需要通过局域网访问本机摄像头时，可以执行 `./start-https.sh`，并在浏览器接受本地自签名证书。
 
-- http://0.0.0.0:5174/?debug=1 显示摄像头及关键点；正式地址默认隐藏。
-- D：显示/隐藏调试窗。F：全屏。R：重新连接摄像头。
-- 黄色骨架是当前主手；其他检测到的手不绘制骨架。回合中锁定主手，避免背景手抢占。
-- 可调停稳时间、移动速度阈值、累计位移阈值、摇拳幅度，修改立即重置当前回合。设置当前会话有效，刷新恢复默认。
-- 停稳时间越长越谨慎；移动速度与位移阈值越小越严格；摇拳幅度越大越不容易误触发。
-- 点击“开始记录”后复现问题，再点击“结束记录”和“导出日志”。导出的 `.log` 是逐帧紧凑文本，保存主手移动轨迹、速度与位移、状态转换、手势评分、锁定结果以及主手关键点，不包含摄像头图像。单次最长 5 分钟。
+## 测试
 
-## 验证与迁移
+```bash
+npm test
+```
 
-自动测试覆盖九种输赢组合、随机抽样、摇拳触发、静止不触发、自动下一局、无手取消、主手锁定，以及参考识别器的侧向剪刀、握拳、运动与关键点抖动回归。已完成生产构建；摄像头实拍和儿童使用体验需在目标设备上调测，不能用这些测试替代实拍准确率验收。
+测试覆盖胜负判断、摇拳触发、静止过滤、回合切换和主手跟踪。
 
-推理采用 MediaPipe Tasks Vision 的 GestureRecognizer（21 个手部关键点及分类），结合三维/图像手指几何评分、稳定性判断。浏览器 Worker 内 WASM CPU 推理，不使用 RK3588 NPU。Ubuntu 24.04 / RK3588 可尝试本机 Chromium + USB 摄像头部署同一 dist，但驱动、浏览器兼容性与耗时尚未实机验证，不承诺 73 ms。
+## SmartApp 封装
 
-主要代码：src/lib/game.js 回合与摇拳；src/lib/rps.js 手势/停稳；src/lib/target.js 主手；src/App.vue 摄像头与游戏界面。public/models、public/vendor 为本地推理资源。
+```bash
+npm run build:smartapp
+```
 
-## 素材
+默认生成：
 
-手势 SVG 来自 Twitter Twemoji，CC BY 4.0：https://github.com/twitter/twemoji ，许可见 public/art/LICENSE-TWEMOJI.txt。小汪图片与 Baloo 2 字体复用用户提供的 English 项目；对外分发前沿用原项目的素材授权要求。MediaPipe 模型信息见 public/MODEL_INFO.json。
+```text
+build/smartapp/rock_paper_scissors-0.1.0.tar.gz
+```
+
+应用标识、版本和组件入口由 [manifest.json](manifest.json) 定义。脚本会执行 SmartApp 专用前端构建、目录组装和 Manifest 校验，并输出 `packageSize` 与 `sha256`。
+
+包内结构：
+
+```text
+rock_paper_scissors/
+├── manifest.json
+├── web/
+│   └── index.html
+└── backend/
+    └── main.py
+```
+
+详细协议、运行要求和发布步骤见 [SmartApp 封装指南](docs/SMARTAPP_PACKAGE.md)。
+
+## 项目结构
+
+```text
+backend/main.py                 # Runtime 管理的摄像头动态服务
+docs/                           # 项目文档
+public/models/                  # MediaPipe 模型
+public/vendor/                  # MediaPipe WASM 运行资源
+scripts/package-smartapp.sh     # SmartApp 组包脚本
+scripts/validate-smartapp.mjs   # 包结构校验
+src/                            # H5 源码
+manifest.json                   # SmartApp Runtime v1 清单
+```
+
+素材授权说明见 [public/art/GENERATED-ASSETS.md](public/art/GENERATED-ASSETS.md) 和 [public/art/LICENSE-TWEMOJI.txt](public/art/LICENSE-TWEMOJI.txt)，模型信息见 [public/MODEL_INFO.json](public/MODEL_INFO.json)。

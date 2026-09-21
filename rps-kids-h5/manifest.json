@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "appId": "rock_paper_scissors",
+  "version": "0.1.0",
+  "web": {
+    "enabled": true,
+    "entry": "index.html"
+  },
+  "backend": {
+    "enabled": true,
+    "entry": "main.py",
+    "dynamicService": true
+  },
+  "routing": {
+    "defaultTarget": "python"
+  }
+}
