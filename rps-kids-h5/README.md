@@ -20,6 +20,20 @@
 
 **特点**：无需浏览器摄像头权限，使用服务器端摄像头，支持远程访问。
 
+### 方式 3：机器狗实体屏
+
+机器狗设备上安装 Electron、FFmpeg、MPV 后，运行：
+
+```bash
+cd /home/unitree/rps-kids-h5
+npm run build
+bash start-screen.sh
+```
+
+该脚本会复用或启动 `server.py`，按机器狗现有液晶框架启动 `Xvfb + Electron Offscreen`，再经 FFmpeg 输出 `transpose=2` 的 BGRA NUT FIFO，最后通过设备已有的 `/tmp/mpv-socket` 接管液晶。它不会另起一个 MPV 进程直接抢 DRM，避免与表情显示链路冲突。实体屏模式默认隐藏调试面板，摄像头仍使用机器狗服务端 `/api/frame`。
+
+设备需要已有的 `/tmp/mpv-socket`。首次运行缺少 `Xvfb`、`ffmpeg` 或 `socat` 时，脚本会在 Debian/Ubuntu 上自动通过 `apt-get` 安装；可设置 `AUTO_INSTALL_DEPS=0` 关闭。也可通过环境变量覆盖工具路径和显示参数：`ELECTRON_BIN`、`FFMPEG_BIN`、`XVFB_BIN`、`SOCAT_BIN`、`MPV_SOCKET`、`SCREEN_DISPLAY`、`SCREEN_RUNTIME_DIR`、`PORT`、`SCREEN_FPS`、`SCREEN_URL`。
+
 开发：`npm ci`、`npm run dev -- --port 5174`。测试 `npm test`，构建 `npm run build`。开发与静态服务勿同时占用相同端口。
 
 ## 怎么玩

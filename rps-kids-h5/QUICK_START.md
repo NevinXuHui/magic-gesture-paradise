@@ -36,6 +36,27 @@ https://localhost:5174/
 - 使用访问设备的摄像头
 - 需要浏览器授权
 
+### 方式 3：机器狗实体屏
+
+在机器狗 Ubuntu 设备执行：
+
+```bash
+cd /home/unitree/rps-kids-h5
+npm run build
+bash start-screen.sh
+```
+
+要求设备已运行液晶 MPV，并存在 `/tmp/mpv-socket`。首次运行缺少 FFmpeg、Xvfb 或 socat 时，启动器会自动通过 apt 安装。页面输出为 480×800，渲染窗口为 800×480，启动器通过设备 MPV IPC 接管画面，使用与 `/mine/Code/ROS/dice/electron` 相同的 `Xvfb → Electron → FFmpeg transpose=2 → NUT FIFO → MPV` 链路。
+
+检查显示链路：
+
+```bash
+test -S /tmp/mpv-socket && echo 'MPV IPC OK'
+command -v Xvfb ffmpeg socat
+```
+
+按 `Ctrl-C` 停止 H5，脚本会尝试调用上级 `electron/restore_expression.sh` 恢复默认表情。
+
 ## 🧪 测试页面
 
 ### 摄像头测试（优化版）
