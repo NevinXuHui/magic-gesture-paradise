@@ -40,7 +40,7 @@ python3 -m venv "smartapp-runtime/.venv"
 
 ## 配置与运行
 
-[`config/runtime.example.toml`](config/runtime.example.toml) 列出了当前接受的全部配置键和默认值，主动示例使用 `/tmp` 和 `fake` Renderer；文件末尾还有已注释的 `/data/smartapp` 生产模板。网络 host 必须是回环 IP 字面量，端口必须在 1–65535，不接受主机名、`0.0.0.0` 或端口 0。
+[`config/runtime.example.toml`](config/runtime.example.toml) 列出了当前接受的全部配置键和默认值，主动示例使用 `/tmp` 和 `fake` Renderer；文件末尾还有已注释的 `/data/smartapp` 与实体屏 `process` Renderer 生产模板。网络 host 必须是回环 IP 字面量，端口必须在 1–65535，不接受主机名、`0.0.0.0` 或端口 0。
 
 只校验配置：
 
@@ -193,7 +193,7 @@ Web/Hybrid 启动时，Runtime 设置当前 Web 指针，让回环 HTTP 服务�
 
 ## 本地验证与目标机验收
 
-本地开发配置的 `renderer.kind="fake"` 只模拟 ready/消息行为，不启动 Electron、Chromium、ROS2、摄像头或 GPU。生产 `CommandRenderer` 以 argv 数组启动外部命令（不经 shell），并向 `send_argv` 的 stdin 写入一条 JSON；当前适配器本身没有实现浏览器 -> Runtime 的入站桥。Web `app_data` 上行只通过 FakeRenderer 在自动化中覆盖，真实桥接属于目标机集成。
+本地开发配置的 `renderer.kind="fake"` 只模拟 ready/消息行为，不启动 Electron、Chromium、ROS2、摄像头或 GPU。`command` Renderer 保留给已有的短命令式显示控制器。生产实体屏使用 `renderer.kind="process"`：Runtime 持有一个严格 JSONL 子进程，完成 ready、下行消息、H5 `app_data` 上行、停止和进程组回收；[renderer/README.md](renderer/README.md) 提供 Xvfb、Electron Offscreen、FFmpeg、MPV 与 JS Bridge 的部署说明。
 
 本地非破坏性检查：
 
@@ -209,7 +209,7 @@ PYTHON=python3.11 "smartapp-runtime/scripts/check.sh"
 
 目标 RK3588 设备上发布前必须另行完成，且本仓库的自动化结果不等于下列验收通过：
 
-- [ ] Electron/浏览器的加载、ready、前后台切换和 Web 入站 `app_data` 桥接；
+- [ ] 在 RK3588 实机确认 Electron 加载、ready、Web 双向 Bridge 与前后台切换；
 - [ ] ROS2 环境、`ROS_DOMAIN_ID`/`RMW_IMPLEMENTATION` 和节点发现；
 - [ ] 摄像头驱动、设备权限、帧率与长时间稳定性；
 - [ ] RK3588 CPU/GPU/NPU 资源、内存上限和热稳定性；

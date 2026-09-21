@@ -1,0 +1,49 @@
+[paths]
+root = "/tmp/smartapp-runtime-rps-validation"
+socket = "/tmp/smartapp-runtime-rps-validation/run/runtime.sock"
+log = "/tmp/smartapp-runtime-rps-validation/logs/runtime.jsonl"
+python_executable = "/usr/bin/python3"
+
+[network]
+static_host = "127.0.0.1"
+static_port = 18080
+backend_host = "127.0.0.1"
+backend_port = 18081
+
+[timeouts]
+download = 60.0
+startup = 120.0
+graceful_stop = 5.0
+sigterm = 3.0
+renderer = 110.0
+
+[limits]
+max_package_bytes = 536870912
+max_file_bytes = 536870912
+max_unpacked_bytes = 1073741824
+max_files = 10000
+max_path_length = 240
+max_message_bytes = 1048576
+max_queue_messages = 128
+max_queue_bytes = 4194304
+
+[process]
+env_passthrough = ["PATH", "LANG", "LC_ALL", "ROS_DOMAIN_ID", "RMW_IMPLEMENTATION"]
+protocol_violation_limit = 5
+
+[renderer]
+kind = "process"
+process_argv = [
+  "/mine/Code/ROS/dice/手势识别/smartapp-runtime/renderer/screen-runtime.sh",
+  "{url}", "{session_id}", "{app_id}", "{version}"
+]
+load_argv = []
+send_argv = []
+stop_argv = []
+restore_argv = [
+  "/mine/Code/ROS/dice/手势识别/smartapp-runtime/renderer/restore-expression.sh"
+]
+
+[logging]
+level = "INFO"
+target = "file"

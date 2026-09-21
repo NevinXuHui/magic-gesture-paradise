@@ -10,6 +10,7 @@ from pathlib import Path
 
 from smartapp_runtime.adapters.command_renderer import CommandRenderer
 from smartapp_runtime.adapters.fake_renderer import FakeRenderer
+from smartapp_runtime.adapters.process_renderer import ProcessRenderer
 from smartapp_runtime.config import RendererConfig
 from smartapp_runtime.domain.errors import ErrorCode, SmartAppError
 from smartapp_runtime.domain.models import Session
@@ -78,6 +79,105 @@ class FakeRendererTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SmartAppError) as callback:
             await renderer.emit_message({"event": "app_data", "dataType": "x", "data": {}})
         self.assertEqual(callback.exception.code, ErrorCode.RENDERER_FAILED)
+
+
+class ProcessRendererTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.session = Session("session-1", "demo_app", "1.0.0", 1)
+        self.script_number = 0
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def config(self, script, restore=None):
+        self.script_number += 1
+        script_path = self.root / "renderer-{0}.py".format(self.script_number)
+        script_path.write_text(script)
+        return RendererConfig(
+            kind="process",
+            process_argv=(sys.executable, "-u", str(script_path), "{url}", "{session_id}"),
+            restore_argv=tuple(restore or (sys.executable, "-c", "pass")),
+        )
+
+    async def test_persistent_jsonl_bridge_is_bidirectional_and_stops_cleanly(self):
+        script = """import json
+import sys
+
+print(json.dumps({"event": "renderer_ready"}), flush=True)
+for raw in sys.stdin:
+    message = json.loads(raw)
+    if message.get("event") == "renderer_stop":
+        break
+    print(json.dumps({
+        "event": "app_data", "dataType": "echo", "data": message,
+    }), flush=True)
+"""
+        renderer = ProcessRenderer(self.config(script), command_timeout=1.0)
+        received = []
+        delivered = asyncio.Event()
+
+        async def handler(message):
+            received.append(message)
+            delivered.set()
+
+        renderer.set_message_handler(handler)
+        await renderer.load("http://127.0.0.1/app", self.session)
+        await renderer.wait_ready(1.0)
+        await renderer.send({"event": "cloud_data", "seq": 1, "data": {"word": "苹果"}})
+        await asyncio.wait_for(delivered.wait(), 1.0)
+        self.assertEqual(received[0]["data"]["data"], {"word": "苹果"})
+        await renderer.stop()
+        await renderer.stop()
+        await renderer.restore_default()
+        await renderer.restore_default()
+
+    async def test_rejects_invalid_first_frame_and_embedded_placeholders(self):
+        bad = "import time\nprint('not-json', flush=True)\ntime.sleep(60)\n"
+        renderer = ProcessRenderer(self.config(bad), command_timeout=0.05)
+        await renderer.load("http://127.0.0.1/app", self.session)
+        with self.assertRaises(SmartAppError) as raised:
+            await renderer.wait_ready(1.0)
+        self.assertEqual(raised.exception.code, ErrorCode.RENDERER_FAILED)
+        await renderer.stop()
+
+        config = self.config("pass")
+        config = RendererConfig(
+            kind="process",
+            process_argv=(sys.executable, "prefix-{url}"),
+            restore_argv=config.restore_argv,
+        )
+        with self.assertRaises(SmartAppError) as placeholder:
+            ProcessRenderer(config)
+        self.assertEqual(placeholder.exception.code, ErrorCode.VALIDATION_ERROR)
+
+    async def test_timeout_terminates_owned_process(self):
+        script = """import json
+import signal
+import time
+
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+print(json.dumps({"event": "renderer_ready"}), flush=True)
+time.sleep(60)
+"""
+        renderer = ProcessRenderer(self.config(script), command_timeout=0.03)
+        await renderer.load("http://127.0.0.1/app", self.session)
+        await renderer.wait_ready(1.0)
+        pid = renderer._process.pid
+        await renderer.stop()
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    async def test_restore_failure_is_sanitized(self):
+        renderer = ProcessRenderer(self.config(
+            "import json\nprint(json.dumps({'event': 'renderer_ready'}), flush=True)\n",
+            restore=(sys.executable, "-c", "raise SystemExit(7)", "secret"),
+        ))
+        with self.assertRaises(SmartAppError) as raised:
+            await renderer.restore_default()
+        self.assertEqual(raised.exception.code, ErrorCode.RENDERER_FAILED)
+        self.assertNotIn("secret", raised.exception.message)
 
 
 class CommandRendererTests(unittest.IsolatedAsyncioTestCase):

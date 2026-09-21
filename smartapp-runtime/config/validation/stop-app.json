@@ -1,0 +1,6 @@
+{
+  "requestId": "deploy-stop-1",
+  "command": "stop_app",
+  "sessionId": "rps-deploy-validation",
+  "reason": "operator"
+}

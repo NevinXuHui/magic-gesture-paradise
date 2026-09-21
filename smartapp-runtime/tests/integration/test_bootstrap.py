@@ -3,6 +3,7 @@ import contextlib
 import io
 import signal
 import socket
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,10 +20,12 @@ from smartapp_runtime.config import (
     LoggingConfig,
     NetworkConfig,
     PathsConfig,
+    RendererConfig,
     RuntimeConfig,
 )
 from smartapp_runtime.__main__ import main
 from smartapp_runtime.adapters.fake_renderer import FakeRenderer
+from smartapp_runtime.adapters.process_renderer import ProcessRenderer
 
 
 class _SyncComponent:
@@ -208,6 +211,22 @@ class ConcreteAssemblyTests(unittest.IsolatedAsyncioTestCase):
                 ).Session("session-1", "demo", "1", 1),
             )
             await first.renderer.wait_ready(0.05)
+
+    async def test_builds_process_renderer_from_config(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw) / "runtime"
+            config = self._config(root)
+            config = RuntimeConfig(
+                paths=config.paths,
+                network=config.network,
+                logging=config.logging,
+                renderer=RendererConfig(
+                    kind="process",
+                    process_argv=(sys.executable, "-c", "pass"),
+                    restore_argv=(sys.executable, "-c", "pass"),
+                ),
+            )
+            self.assertIsInstance(build_runtime(config).renderer, ProcessRenderer)
 
     async def test_port_probe_reports_exact_bound_ipv4_port(self):
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

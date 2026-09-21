@@ -1,0 +1,12 @@
+{
+  "requestId": "deploy-cloud-1",
+  "command": "cloud_data",
+  "sessionId": "rps-deploy-validation",
+  "seq": 1,
+  "target": "python",
+  "dataType": "validation",
+  "trigger": "deploy_test",
+  "data": {
+    "ok": true
+  }
+}

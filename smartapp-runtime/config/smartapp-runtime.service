@@ -13,6 +13,7 @@ UMask=0007
 WorkingDirectory=/opt/smartapp-runtime
 ExecStart=/opt/smartapp-runtime/.venv/bin/python -m smartapp_runtime --config /etc/smartapp-runtime/runtime.toml
 Environment=PYTHONUNBUFFERED=1
+# Renderer 可按设备覆盖：Environment=SCREEN_DISPLAY=:99 SCREEN_FPS=30
 Restart=on-failure
 RestartSec=2s
 TimeoutStopSec=60s

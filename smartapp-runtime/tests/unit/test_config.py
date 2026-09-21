@@ -149,6 +149,30 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "command renderer"):
                 load_config(invalid_path)
 
+    def test_validates_process_renderer(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            valid_path = self.write_config(
+                root,
+                "[renderer]\nkind = \"process\"\n"
+                "process_argv = [\"screen-runtime\", \"{url}\"]\n"
+                "restore_argv = [\"restore-expression\"]\n",
+            )
+            config = load_config(valid_path).renderer
+            self.assertEqual(config.kind, "process")
+            self.assertEqual(config.process_argv, ("screen-runtime", "{url}"))
+
+            for content in (
+                '[renderer]\nkind = "process"\nrestore_argv = ["restore"]\n',
+                '[renderer]\nkind = "process"\nprocess_argv = ["screen"]\n',
+                '[renderer]\nkind = "process"\nprocess_argv = ["screen"]\n'
+                'restore_argv = ["restore"]\nsend_argv = ["send"]\n',
+            ):
+                with self.subTest(content=content):
+                    path = self.write_config(root, content)
+                    with self.assertRaisesRegex(ConfigError, "process renderer"):
+                        load_config(path)
+
     def test_rejects_non_positive_limit_and_duplicate_environment_variable(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

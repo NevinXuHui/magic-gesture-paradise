@@ -38,6 +38,7 @@ protocol_violation_limit = 5
 [renderer]
 # fake 仅用于本地开发/自动化，不会启动 Electron 或浏览器。
 kind = "fake"
+process_argv = []
 load_argv = []
 send_argv = []
 stop_argv = []
@@ -63,10 +64,10 @@ target = "stderr"
 #
 # [timeouts]
 # download = 60.0
-# startup = 15.0
+# startup = 75.0
 # graceful_stop = 3.0
 # sigterm = 3.0
-# renderer = 15.0
+# renderer = 60.0
 #
 # [limits]
 # max_package_bytes = 536870912
@@ -83,16 +84,17 @@ target = "stderr"
 # protocol_violation_limit = 5
 #
 # [renderer]
-# kind = "command"
-# load_argv = ["/usr/local/bin/smartapp-renderer", "load", "{url}", "--session", "{session_id}", "--app", "{app_id}", "--version", "{version}"]
-# send_argv = ["/usr/local/bin/smartapp-renderer", "send", "--session", "{session_id}"]
-# stop_argv = ["/usr/local/bin/smartapp-renderer", "stop-current"]
-# restore_argv = ["/usr/local/bin/smartapp-renderer", "restore-default"]
+# kind = "process"
+# process_argv = ["/opt/smartapp-runtime/renderer/screen-runtime.sh", "{url}", "{session_id}", "{app_id}", "{version}"]
+# load_argv = []
+# send_argv = []
+# stop_argv = []
+# restore_argv = ["/opt/smartapp-runtime/renderer/restore-expression.sh"]
 #
 # [logging]
 # level = "INFO"
 # target = "file"
 #
-# Renderer 命令是 argv 数组，不经 shell。load/send 可使用
+# process Renderer 保持一个 JSONL 子进程；process_argv 可使用
 # {url}/{session_id}/{app_id}/{version}，占位符必须独占一个 argv 元素。
-# stop/restore 不得使用任何会话占位符。send 通过 stdin 接收一行 JSON。
+# restore_argv 不得使用会话占位符。

@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Optional
 
 from smartapp_runtime.adapters.command_renderer import CommandRenderer
 from smartapp_runtime.adapters.fake_renderer import FakeRenderer
+from smartapp_runtime.adapters.process_renderer import ProcessRenderer
 from smartapp_runtime.application.coordinator import RuntimeCoordinator
 from smartapp_runtime.application.router import MessageRouter
 from smartapp_runtime.config import RuntimeConfig
@@ -166,6 +167,12 @@ def build_runtime(config: RuntimeConfig) -> RuntimeAssembly:
         renderer = CommandRenderer(
             config.renderer,
             max_output_bytes=config.limits.max_message_bytes,
+            command_timeout=config.timeouts.renderer,
+        )
+    elif config.renderer.kind == "process":
+        renderer = ProcessRenderer(
+            config.renderer,
+            max_message_bytes=config.limits.max_message_bytes,
             command_timeout=config.timeouts.renderer,
         )
     else:

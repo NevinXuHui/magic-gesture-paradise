@@ -71,6 +71,7 @@ class ProcessConfig:
 @dataclass(frozen=True)
 class RendererConfig:
     kind: str = "fake"
+    process_argv: Tuple[str, ...] = ()
     load_argv: Tuple[str, ...] = ()
     send_argv: Tuple[str, ...] = ()
     stop_argv: Tuple[str, ...] = ()
@@ -116,7 +117,9 @@ _SECTION_FIELDS = {
         "max_queue_bytes",
     },
     "process": {"env_passthrough", "protocol_violation_limit"},
-    "renderer": {"kind", "load_argv", "send_argv", "stop_argv", "restore_argv"},
+    "renderer": {
+        "kind", "process_argv", "load_argv", "send_argv", "stop_argv", "restore_argv"
+    },
     "logging": {"level", "target"},
 }
 
@@ -240,14 +243,25 @@ def _load_process(values):
 def _load_renderer(values):
     default = RendererConfig()
     kind = _require_string("renderer", "kind", values.get("kind", default.kind))
-    if kind not in ("fake", "command"):
-        raise ConfigError("renderer.kind must be fake or command")
+    if kind not in ("fake", "command", "process"):
+        raise ConfigError("renderer.kind must be fake, command or process")
     argv = {
         key: _require_argv(key, values.get(key, list(getattr(default, key))))
-        for key in ("load_argv", "send_argv", "stop_argv", "restore_argv")
+        for key in (
+            "process_argv", "load_argv", "send_argv", "stop_argv", "restore_argv"
+        )
     }
-    if kind == "command" and any(not argv[key] for key in argv):
-        raise ConfigError("command renderer requires all argv fields")
+    if kind == "command" and not all(
+        argv[key] for key in ("load_argv", "send_argv", "stop_argv", "restore_argv")
+    ):
+        raise ConfigError("command renderer requires all command argv fields")
+    if kind == "command" and argv["process_argv"]:
+        raise ConfigError("command renderer does not accept process_argv")
+    if kind == "process":
+        if not argv["process_argv"] or not argv["restore_argv"]:
+            raise ConfigError("process renderer requires process_argv and restore_argv")
+        if any(argv[key] for key in ("load_argv", "send_argv", "stop_argv")):
+            raise ConfigError("process renderer does not accept command argv fields")
     return RendererConfig(kind=kind, **argv)
 
 

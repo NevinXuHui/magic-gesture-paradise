@@ -1,0 +1,4 @@
+{
+  "requestId": "deploy-status-1",
+  "command": "get_status"
+}

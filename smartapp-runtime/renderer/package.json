@@ -1,0 +1,13 @@
+{
+  "name": "smartapp-screen-renderer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron offscreen renderer owned by SmartApp Runtime",
+  "scripts": {
+    "check": "node --check screen-renderer.js && node --check screen-preload.js",
+    "install:electron": "node node_modules/electron/install.js"
+  },
+  "dependencies": {
+    "electron": "44.4.3"
+  }
+}
