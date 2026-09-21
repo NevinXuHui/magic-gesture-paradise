@@ -8,7 +8,11 @@ import {GameRound,FistShake,ShakeStopGate,LABELS} from './lib/game.js'
 const base=import.meta.env.BASE_URL
 const query=new URLSearchParams(location.search)
 const previewScene=['waiting','shaking','revealing','win','lose','draw'].includes(query.get('preview'))?query.get('preview'):null
-const useServerCamera=query.get('camera')==='server'||query.get('server')==='1'
+const smartAppMode=import.meta.env.VITE_SMARTAPP==='1'
+const useServerCamera=smartAppMode||query.get('camera')==='server'||query.get('server')==='1'
+const configuredCameraApi=query.get('cameraApi')||import.meta.env.VITE_CAMERA_API_BASE||''
+const cameraApiBase=(configuredCameraApi||(smartAppMode?'http://127.0.0.1:18081':'')).replace(/\/$/,'')
+const cameraApi=path=>`${cameraApiBase}${path}`
 const screenMode=query.get('screen')==='1'
 const video=ref(null),preview=ref(null),debug=ref(!screenMode&&query.get('debug')!=='0')
 const ready=ref(false),loading=ref(false),message=ref('正在准备摄像头…'),error=ref('')
@@ -36,6 +40,19 @@ function finishRecording(reason='manual'){
 function stop(){finishRecording('camera_stopped');session++;ready.value=false;loading.value=false;busy=false;cancelAnimationFrame(raf);clearTimeout(timer);clearTimeout(watchdog);worker?.terminate();worker=null;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value){video.value.srcObject=null;video.value.src=''}resetInteraction()}
 function fail(text){stop();error.value=text;message.value='摄像头需要帮个忙'}
 function closeCamera(){stop();error.value='摄像头已关闭。按 R 或“重连相机”可再次开启。';message.value='摄像头已关闭'}
+async function waitForServerCamera(token,timeoutMs=12000){
+  const deadline=performance.now()+timeoutMs
+  let lastError='服务端摄像头未就绪'
+  while(token===session&&performance.now()<deadline){
+    try{
+      const response=await fetch(cameraApi('/api/status'),{cache:'no-store'})
+      if(response.ok){const status=await response.json();if(status.ready)return;lastError=status.error||lastError}
+      else lastError='服务端摄像头 API 未响应，请确认 backend 已启动。'
+    }catch(e){lastError=e.message||lastError}
+    await new Promise(resolve=>setTimeout(resolve,250))
+  }
+  if(token===session)throw Error(lastError)
+}
 function beginRecording(){
   if(!ready.value||recording.value)return
   recordedFrames.value=0;recordedSeconds.value=0
@@ -83,10 +100,7 @@ async function start(){
     if(useServerCamera){
       // 服务端模式只检查后端状态；实际帧由 capture() 按推理节奏请求。
       message.value='正在连接服务端摄像头…'
-      const statusResp=await fetch('/api/status',{cache:'no-store'})
-      if(!statusResp.ok)throw Error('服务端摄像头 API 未响应，请确认 server.py 已启动。')
-      const status=await statusResp.json()
-      if(!status.ready)throw Error(status.error||'服务端摄像头未就绪')
+      await waitForServerCamera(token)
       if(token!==session)return
     }else{
       // 浏览器本地摄像头模式
@@ -127,7 +141,7 @@ async function capture(now){
   try{
     let bitmap
     if(useServerCamera){
-      const response=await fetch('/api/frame?t='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(5000)})
+      const response=await fetch(cameraApi('/api/frame?t='+Date.now()),{cache:'no-store',signal:AbortSignal.timeout(5000)})
       if(!response.ok)throw Error(await response.text())
       bitmap=await createImageBitmap(await response.blob())
     }else{
