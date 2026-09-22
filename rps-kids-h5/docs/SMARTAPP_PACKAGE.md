@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -42,6 +42,14 @@ Runtime -> backend  app_stop
 ```
 
 stdout 只输出协议消息；运行日志写入 stderr。收到 `app_stop`、SIGTERM 或 SIGINT 后，backend 会停止 HTTP 服务和摄像头线程。
+
+游戏结果由 H5 通过 Renderer Bridge 上报，不经过摄像头 backend：
+
+```json
+{"event":"app_data","dataType":"game_result","data":{"user":"fist","computer":"peace","outcome":"win","rounds":1}}
+```
+
+Renderer 将事件转发给 Runtime，Runtime 再补充权威的 `sessionId` 和 `appId` 并推送给 Agent。
 
 Runtime 注入以下环境变量：
 
@@ -64,7 +72,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.3.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.5.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -79,7 +87,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,

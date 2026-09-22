@@ -14,7 +14,9 @@ const configuredCameraApi=query.get('cameraApi')||import.meta.env.VITE_CAMERA_AP
 const cameraApiBase=(configuredCameraApi||(smartAppMode?'http://127.0.0.1:18081':'')).replace(/\/$/,'')
 const cameraApi=path=>`${cameraApiBase}${path}`
 const screenMode=query.get('screen')==='1'
-const video=ref(null),preview=ref(null),debug=ref(!screenMode&&query.get('debug')!=='0')
+// SmartApp runs on the physical display; keep the camera diagnostics hidden
+// there by default while retaining D/debug=1 for local troubleshooting.
+const video=ref(null),preview=ref(null),debug=ref(!smartAppMode&&!screenMode&&query.get('debug')!=='0'||query.get('debug')==='1')
 const ready=ref(false),loading=ref(false),message=ref('正在准备摄像头…'),error=ref('')
 const settings=ref({holdMs:250,motionSpeed:1.8,maxDrift:.22,amplitude:.22})
 const engine=new GameRound(),target=new MotionTarget(),still=new StillRps(),shake=new FistShake(),shakeStop=new ShakeStopGate()
@@ -31,6 +33,18 @@ const animatePhase=computed(()=>ready.value?round.value.phase:'waiting')
 const phaseNames={moving:'手在移动',settling:'等待停稳',recognized:'已确认',unclear:'手型不明确',no_hand:'等待主手',multiple:'检测到多手'}
 function resetInteraction(){target.reset();still.reset();shake.reset();shakeStop.reset();engine.reset();round.value=engine.snapshot();motionHint.value='waiting'}
 function logEvent(type,detail=''){if(recording.value)recordingData.lines.push(`E|${Math.round(performance.now()-recordingData.startedPerf)}|${type}|${detail}`)}
+function publishGameResult(result){
+  if(!window.smartApp?.postMessage||!result?.user||!result?.computer||!result?.outcome)return
+  try{
+    window.smartApp.postMessage({
+      event:'app_data',
+      dataType:'game_result',
+      data:{user:result.user,computer:result.computer,outcome:result.outcome,rounds:result.rounds}
+    })
+  }catch(error){
+    console.warn('Unable to publish game result:',error)
+  }
+}
 function settingsChanged(){logEvent('settings_changed',`hold=${settings.value.holdMs},speed=${settings.value.motionSpeed},drift=${settings.value.maxDrift},amplitude=${settings.value.amplitude}`);resetInteraction()}
 function finishRecording(reason='manual'){
   if(!recording.value)return
@@ -196,6 +210,7 @@ function receive({result,ms,timestamp}){
   }
   round.value=engine.update({now:timestamp,shake:trigger,recognized:recognition,handPresent:!!p})
   if(before!==round.value.phase)logEvent('phase_changed',`${before}->${round.value.phase}`)
+  if(before!=='result'&&round.value.phase==='result')publishGameResult(round.value)
   if(before==='waiting'&&round.value.phase==='shaking'){still.reset();shake.reset();shakeStop.reset();motionHint.value='moving'}
   if(before!=='waiting'&&round.value.phase==='waiting'){target.reset();still.reset();shake.reset();shakeStop.reset();motionHint.value='waiting'}
   const gamePhase=shakeMotion?.moving?'继续摇拳中':shakeMotion&&!shakeMotion.stopped?'等待摇拳结束':recognition?phaseNames[recognition.phase]:null
@@ -290,7 +305,7 @@ onBeforeUnmount(()=>{cancelAnimationFrame(startupFrame);clearTimeout(startupTime
       <div v-if="!ready" class="setup-overlay"><img :src="`${base}art/dog_mascot.webp`" alt="小汪"/><h2>{{message}}</h2><p>{{error||'第一次使用时，请允许浏览器访问摄像头'}}</p><small v-if="error">请大人帮忙 · 按 R 重试</small><div v-else class="loading-dots">● ● ●</div></div>
     </main>
     <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
-    <button v-else-if="!debug&&!screenMode" class="debug-open" @click="debug=true">摄像头调试 · D</button>
+    <button v-else-if="!debug&&!screenMode&&!smartAppMode" class="debug-open" @click="debug=true">摄像头调试 · D</button>
     <aside class="debug-panel" :style="{display: debug ? 'block' : 'none'}"><div class="debug-heading"><strong>摄像头调试</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
   </div>
 </template>

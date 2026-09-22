@@ -52,7 +52,7 @@ npm run build:smartapp
 默认生成：
 
 ```text
-build/smartapp/rock_paper_scissors-0.1.3.tar.gz
+build/smartapp/rock_paper_scissors-0.1.5.tar.gz
 ```
 
 应用标识、版本和组件入口由 [manifest.json](manifest.json) 定义。脚本会执行 SmartApp 专用前端构建、目录组装和 Manifest 校验，并输出 `packageSize` 与 `sha256`。
@@ -69,6 +69,16 @@ rock_paper_scissors/
 ```
 
 详细协议、运行要求和发布步骤见 [SmartApp 封装指南](docs/SMARTAPP_PACKAGE.md)。
+
+## 游戏结果上报
+
+SmartApp 模式下，每局进入结果阶段时，H5 通过 `window.smartApp.postMessage` 向 Runtime 上报一次：
+
+```json
+{"event":"app_data","dataType":"game_result","data":{"user":"fist","computer":"peace","outcome":"win","rounds":1}}
+```
+
+手势值为 `fist`（石头）、`peace`（剪刀）、`palm`（布）；结果值为玩家视角的 `win`、`lose`、`draw`。Runtime Agent 客户端可通过 `test_client.sh rps listen` 持续订阅。
 
 ## 项目结构
 
