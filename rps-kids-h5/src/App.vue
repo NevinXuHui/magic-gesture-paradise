@@ -11,7 +11,7 @@ const previewScene=['waiting','shaking','revealing','win','lose','draw'].include
 const smartAppMode=import.meta.env.VITE_SMARTAPP==='1'
 const useServerCamera=smartAppMode||query.get('camera')==='server'||query.get('server')==='1'
 const configuredCameraApi=query.get('cameraApi')||import.meta.env.VITE_CAMERA_API_BASE||''
-const cameraApiBase=(configuredCameraApi||(smartAppMode?'http://127.0.0.1:18081':'')).replace(/\/$/,'')
+const cameraApiBase=configuredCameraApi.replace(/\/$/,'')
 const cameraApi=path=>`${cameraApiBase}${path}`
 const screenMode=query.get('screen')==='1'
 // SmartApp runs on the physical display; keep the camera diagnostics hidden

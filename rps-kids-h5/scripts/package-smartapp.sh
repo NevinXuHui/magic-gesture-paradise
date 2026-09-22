@@ -23,7 +23,7 @@ if [[ "$VERSION" != "$PACKAGE_VERSION" ]]; then
 fi
 
 echo "构建 SmartApp H5：$APP_ID@$VERSION"
-VITE_SMARTAPP=1 VITE_CAMERA_API_BASE=http://127.0.0.1:18081 npm run build
+VITE_SMARTAPP=1 npm run build
 
 APP_ROOT="$STAGE_DIR/$APP_ID"
 mkdir -p "$APP_ROOT/web" "$APP_ROOT/backend" "$OUTPUT_DIR"

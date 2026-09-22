@@ -52,7 +52,7 @@ npm run build:smartapp
 默认生成：
 
 ```text
-build/smartapp/rock_paper_scissors-0.1.5.tar.gz
+build/smartapp/rock_paper_scissors-0.1.6.tar.gz
 ```
 
 应用标识、版本和组件入口由 [manifest.json](manifest.json) 定义。脚本会执行 SmartApp 专用前端构建、目录组装和 Manifest 校验，并输出 `packageSize` 与 `sha256`。
