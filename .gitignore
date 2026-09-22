@@ -1,6 +1,7 @@
 **/node_modules/
 **/runtime-data/
 **/dist/
+**/build/
 **/.vite/
 **/*.log
 **/*.pid
@@ -17,6 +18,8 @@ coverage/
 **/__pycache__/
 *.py[cod]
 *$py.class
+**/.venv/
+**/.venv-*/
 
 # Claude Code
 .claude/
