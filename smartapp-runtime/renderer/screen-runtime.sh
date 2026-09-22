@@ -4,7 +4,7 @@ set -Eeuo pipefail
 RENDERER_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SCREEN_URL=${1:?missing SmartApp URL}
 : "${SCREEN_DISPLAY:=:99}"
-: "${SCREEN_FPS:=30}"
+: "${SCREEN_FPS:=15}"
 : "${SCREEN_RUNTIME_DIR:=/run/smartapp-renderer}"
 : "${MPV_SOCKET:=/tmp/mpv-socket}"
 

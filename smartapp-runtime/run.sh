@@ -9,7 +9,7 @@ VENV_DIR="$SCRIPT_DIR/.venv"
 CONFIG_FILE="$SCRIPT_DIR/config/validation/runtime-rps.toml"
 PYTHON=${PYTHON:-python3.8}
 VENV_PYTHON="$VENV_DIR/bin/python"
-LOCAL_PACKAGE_CERT="/tmp/smartapp-rps-test.crt"
+LOCAL_PACKAGE_CERT="$SCRIPT_DIR/smartapp-rps-test.crt"
 
 echo "=========================================="
 echo "SmartApp Runtime 启动脚本"
@@ -20,6 +20,13 @@ cd "$SCRIPT_DIR"
 if [ -z "${SSL_CERT_FILE:-}" ] && [ -f "$LOCAL_PACKAGE_CERT" ]; then
     export SSL_CERT_FILE="$LOCAL_PACKAGE_CERT"
 fi
+
+# 本地验证包服务不应经过系统 HTTP(S) 代理。
+case ",${NO_PROXY:-}," in
+    *,127.0.0.1,*) ;;
+    *) export NO_PROXY="${NO_PROXY:+$NO_PROXY,}127.0.0.1,localhost" ;;
+esac
+export no_proxy="$NO_PROXY"
 
 # 检查Python版本
 echo "📌 检查Python环境..."

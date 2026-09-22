@@ -67,6 +67,18 @@ function mpvRequest(command, timeoutMs = 3000) {
   })
 }
 
+async function waitForMpvPath(expected, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs
+  let currentPath = ''
+  do {
+    const current = await mpvRequest(['get_property', 'path'])
+    currentPath = String(current.data || '')
+    if (currentPath === expected) return
+    await new Promise(resolve => setTimeout(resolve, 100))
+  } while (Date.now() < deadline)
+  throw Error(`MPV 未加载 SmartApp FIFO，当前路径: ${currentPath || '<empty>'}`)
+}
+
 function startEncoder(width, height) {
   if (encoder || stopping) return
   const transform = width === PAGE_WIDTH && height === PAGE_HEIGHT
@@ -109,8 +121,7 @@ async function claimDisplay() {
     await mpvRequest(['vf', 'set', `fps=${FPS}`])
     await mpvRequest(['loadfile', OUTPUT_FIFO, 'replace'], 8000)
     await mpvRequest(['set_property', 'pause', false])
-    const current = await mpvRequest(['get_property', 'path'])
-    if (!String(current.data || '').includes('video.nut')) throw Error('MPV 未加载 SmartApp FIFO')
+    await waitForMpvPath(OUTPUT_FIFO)
     readySent = true
     emit({ event: 'renderer_ready' })
     while (pendingAppData.length > 0) emit(pendingAppData.shift())

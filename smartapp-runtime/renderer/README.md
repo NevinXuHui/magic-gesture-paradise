@@ -55,7 +55,7 @@ restore_argv = ["/opt/smartapp-runtime/renderer/restore-expression.sh"]
 | `XVFB_BIN` | `Xvfb` | Xvfb 路径或命令名 |
 | `MPV_SOCKET` | `/tmp/mpv-socket` | 设备 MPV IPC socket |
 | `SCREEN_DISPLAY` | `:99` | Xvfb 显示号 |
-| `SCREEN_FPS` | `30` | 输出帧率 |
+| `SCREEN_FPS` | `15` | 输出帧率 |
 | `SCREEN_RUNTIME_DIR` | `/run/smartapp-renderer` | FIFO、日志和用户数据目录 |
 
 ## H5 Bridge
