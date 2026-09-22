@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd \\\"/Volumes/mine/Code/ROS/dice/手势识别/smartapp-runtime\\\" && bash run.sh 2>&1 &\\nSCRIPT_PID=$!\\nsleep 3\\nps -p $SCRIPT_PID > /dev/null 2>&1 && echo \\\"✓ 脚本正在运行 (PID: $SCRIPT_PID)\\\" || echo \\...",
-  "error": "Exit code 143\nCommand timed out after 2m 0s\n==========================================\nSmartApp Runtime 启动脚本\n==========================================\n📌 检查Python环境...\n✓ Python版本: 3.14.6\n\n📦 创建虚拟环境...\n✓ 虚拟环境已创建: /Volumes/mine/Code/ROS/dice/手势识别/smartapp-runtime/.venv\n\n📦 安装项目依赖...\n✓ 脚本正在运行 (PID: 17008)\n✓ 依赖安装完成\n\n🔍 验证配置文件...\nconfiguration is valid\n✓ 配置验证通过\n\n==========================================\n🚀 启动 SmartApp Runtime\n==========================================\n配置文件: /Volumes/mine/Code/ROS/d...",
-  "timestamp": "2026-09-20T03:32:34.336Z",
-  "retry_count": 1
-}

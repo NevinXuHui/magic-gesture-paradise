@@ -23,6 +23,7 @@ coverage/
 
 # Claude Code
 .claude/
+.omc/
 
 # Backup files
 *.backup
