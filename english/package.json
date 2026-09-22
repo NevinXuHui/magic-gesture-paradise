@@ -1,0 +1,10 @@
+{
+  "name": "cloud-show-display",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/test-smartapp.mjs",
+    "build:smartapp": "bash scripts/package-smartapp.sh"
+  }
+}

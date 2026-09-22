@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "appId": "cloud_show_display",
+  "version": "0.2.0",
+  "web": {
+    "enabled": true,
+    "entry": "index.html"
+  },
+  "backend": {
+    "enabled": false,
+    "entry": "main.py",
+    "dynamicService": false
+  },
+  "routing": {
+    "defaultTarget": "web"
+  }
+}
