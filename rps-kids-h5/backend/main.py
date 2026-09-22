@@ -55,8 +55,8 @@ def capture():
             "shmsrc socket-path={0} is-live=true do-timestamp=true ! "
             "image/jpeg,width=1920,height=1080,framerate=30/1 ! "
             "queue leaky=downstream max-size-buffers=1 max-size-bytes=0 max-size-time=0 ! "
-            "videorate drop-only=true ! image/jpeg,framerate=15/1 ! jpegdec ! "
-            "videoconvert ! videoscale ! video/x-raw,format=BGR,width=960,height=540 ! "
+            "videorate drop-only=true ! image/jpeg,framerate=10/1 ! jpegdec ! "
+            "videoconvert ! videoscale ! video/x-raw,format=BGR,width=640,height=360 ! "
             "appsink drop=true max-buffers=1 sync=false"
         ).format(stream_path)
         capture_device = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
@@ -69,7 +69,7 @@ def capture():
                 ok, image = capture_device.read()
                 if not ok:
                     break
-                ok, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                ok, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if ok:
                     with state_lock:
                         latest_frame = jpeg.tobytes()
@@ -138,6 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_body(503, "text/plain; charset=utf-8", message.encode("utf-8"))
 
     def log_message(self, format_string, *args):
+        if self.path.split("?", 1)[0] == "/api/frame":
+            return
         log(format_string % args)
 
 

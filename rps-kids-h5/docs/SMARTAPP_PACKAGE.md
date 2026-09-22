@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -64,7 +64,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.0.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.3.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -79,7 +79,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,
