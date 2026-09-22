@@ -27,18 +27,42 @@ VITE_SMARTAPP=1 npm run build
 
 APP_ROOT="$STAGE_DIR/$APP_ID"
 mkdir -p "$APP_ROOT/web" "$APP_ROOT/backend" "$OUTPUT_DIR"
-cp -R --no-preserve=ownership dist/. "$APP_ROOT/web/"
+cp -R dist/. "$APP_ROOT/web/"
 cp manifest.json "$APP_ROOT/manifest.json"
-cp backend/main.py "$APP_ROOT/backend/main.py"
+cp backend/main.py backend/inference.py backend/requirements.txt "$APP_ROOT/backend/"
+mkdir -p "$APP_ROOT/backend/models"
+cp public/models/gesture_recognizer.task "$APP_ROOT/backend/models/"
+# Python owns the model; ship no browser inference assets in the web component.
+rm -rf "$APP_ROOT/web/vendor" "$APP_ROOT/web/models" "$APP_ROOT/web/inference-worker.js"
 
 node scripts/validate-smartapp.mjs "$APP_ROOT"
 
 ARCHIVE="$OUTPUT_DIR/$APP_ID-$VERSION.tar.gz"
 TEMP_ARCHIVE="$STAGE_DIR/$APP_ID-$VERSION.tar.gz"
-tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-  -czf "$TEMP_ARCHIVE" -C "$STAGE_DIR" "$APP_ID"
+python3 - "$STAGE_DIR" "$APP_ID" "$TEMP_ARCHIVE" <<'PYARCHIVE'
+import gzip, os, sys, tarfile
+from pathlib import Path
+stage, app_id, output = sys.argv[1:]
+with open(output, 'wb') as raw, gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as zipped:
+    with tarfile.open(fileobj=zipped, mode='w') as archive:
+        for path in sorted((Path(stage)/app_id).rglob('*')):
+            info = archive.gettarinfo(str(path), str(path.relative_to(stage)))
+            info.uid = info.gid = 0
+            info.uname = info.gname = ''
+            info.mtime = 0
+            if path.is_file():
+                with path.open('rb') as stream:
+                    archive.addfile(info, stream)
+            else:
+                archive.addfile(info)
+PYARCHIVE
 mv -f "$TEMP_ARCHIVE" "$ARCHIVE"
 
 echo "SmartApp 包：$ARCHIVE"
-echo "packageSize=$(stat -c '%s' "$ARCHIVE")"
-echo "sha256=$(sha256sum "$ARCHIVE" | awk '{print $1}')"
+python3 - "$ARCHIVE" <<'PYINFO'
+import hashlib, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+print('packageSize=' + str(p.stat().st_size))
+print('sha256=' + hashlib.sha256(p.read_bytes()).hexdigest())
+PYINFO

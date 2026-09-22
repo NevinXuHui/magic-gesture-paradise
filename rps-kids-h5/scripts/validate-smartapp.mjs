@@ -27,3 +27,7 @@ if (typeof manifest.backend.dynamicService !== 'boolean') throw Error('backend.d
 entry('web', manifest.web, 'web')
 entry('backend', manifest.backend, 'backend')
 console.log(`SmartApp 结构校验通过：${manifest.appId}@${manifest.version}`)
+
+for (const file of ['inference.py', 'requirements.txt', 'models/gesture_recognizer.task']) {
+  if (!statSync(join(root, 'backend', file)).isFile()) throw Error(`缺少 Python 推理资源 ${file}`)
+}

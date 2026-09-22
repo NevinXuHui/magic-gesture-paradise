@@ -1,0 +1,4 @@
+# Robot runtime: use the target system OpenCV built WITH GStreamer.
+# Do not replace system cv2 with the desktop pip OpenCV wheel.
+mediapipe==0.10.18
+numpy>=1.26,<2

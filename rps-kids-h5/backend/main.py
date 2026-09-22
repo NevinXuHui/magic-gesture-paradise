@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import json
 import os
 import signal
@@ -18,6 +19,9 @@ STREAM_PATHS = ("/tmp/neck_jpeg", "/tmp/foo_fhd", "/tmp/neck_hd")
 state_lock = threading.Lock()
 stop_event = threading.Event()
 latest_frame = None
+latest_recognition = None
+frame_sequence = 0
+inference = None
 latest_update = 0.0
 camera_problem = "等待摄像头初始化"
 
@@ -42,7 +46,7 @@ def find_stream():
 
 
 def capture():
-    global latest_frame, latest_update, camera_problem
+    global latest_frame, latest_update, camera_problem, latest_recognition, frame_sequence
     while not stop_event.is_set():
         stream_path = find_stream()
         if stream_path is None:
@@ -69,12 +73,22 @@ def capture():
                 ok, image = capture_device.read()
                 if not ok:
                     break
+                captured_at = time.monotonic()
+                recognition = inference.recognize_image(image)
+                if recognition is None:
+                    continue
                 ok, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if ok:
                     with state_lock:
                         latest_frame = jpeg.tobytes()
-                        latest_update = time.monotonic()
+                        frame_sequence += 1
+                        latest_recognition = dict(recognition, sequence=frame_sequence,
+                                                  width=image.shape[1], height=image.shape[0])
+                        latest_update = captured_at
                         camera_problem = ""
+        except Exception as error:
+            log("摄像头或推理失败：{0}".format(error))
+            set_problem(str(error))
         finally:
             capture_device.release()
         if not stop_event.is_set():
@@ -109,13 +123,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if path not in ("/api/frame", "/api/status"):
+        if path not in ("/api/frame", "/api/status", "/api/recognition"):
             self.send_body(404, "application/json", b'{"error":"not found"}')
             return
 
         with state_lock:
             ready = latest_frame is not None and time.monotonic() - latest_update < 3
             data = latest_frame if ready else None
+            recognition = dict(latest_recognition) if ready and latest_recognition else None
             message = camera_problem or "未收到新的视频帧"
             age_ms = round((time.monotonic() - latest_update) * 1000) if latest_update else None
 
@@ -132,13 +147,19 @@ class Handler(BaseHTTPRequestHandler):
                 separators=(",", ":"),
             ).encode("utf-8")
             self.send_body(200, "application/json; charset=utf-8", body)
+        elif path == "/api/recognition" and recognition is not None:
+            recognition["ageMs"] = age_ms
+            if "preview=1" in self.path.split("?", 1)[-1]:
+                recognition["preview"] = base64.b64encode(data).decode("ascii")
+            body = json.dumps(recognition, separators=(",", ":")).encode()
+            self.send_body(200, "application/json", body)
         elif data is not None:
             self.send_body(200, "image/jpeg", data)
         else:
             self.send_body(503, "text/plain; charset=utf-8", message.encode("utf-8"))
 
     def log_message(self, format_string, *args):
-        if self.path.split("?", 1)[0] == "/api/frame":
+        if self.path.split("?", 1)[0] in ("/api/frame", "/api/recognition"):
             return
         log(format_string % args)
 
@@ -158,9 +179,14 @@ def terminate(_signum, _frame):
 
 
 def main():
+    global inference
     signal.signal(signal.SIGTERM, terminate)
     signal.signal(signal.SIGINT, terminate)
     read_runtime_init()
+    # Initialize before app_ready; stdout remains exclusively Runtime JSONL.
+    from inference import Inference
+    cv2.setNumThreads(1)
+    inference = Inference()
 
     host = os.environ.get("SMARTAPP_DYNAMIC_HOST", "127.0.0.1")
     port = int(os.environ.get("SMARTAPP_DYNAMIC_PORT", "18081"))
@@ -189,6 +215,8 @@ def main():
         server.server_close()
         server_thread.join(timeout=2)
         camera_thread.join(timeout=2)
+        if not camera_thread.is_alive():
+            inference.close()
         log("backend 已停止")
 
 

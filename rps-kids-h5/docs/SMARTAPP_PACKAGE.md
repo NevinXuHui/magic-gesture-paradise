@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -72,7 +72,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.6.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.7.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -87,7 +87,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,
@@ -109,3 +109,9 @@ sha256=<64 位 SHA-256>
 ## 本地开发与正式部署边界
 
 `start-local.sh` 和 `start-https.sh` 只用于浏览器本地开发，使用访问设备自己的摄像头。正式设备部署只分发 SmartApp tar.gz，不运行这两个脚本。
+
+## 0.1.7 Python 推理变更
+
+模型由 backend/inference.py 使用原生 MediaPipe CPU 加载，不再在 Electron Worker 中加载 WASM。`/api/status` 仅在真实帧完成推理后 ready；`/api/recognition?preview=0` 返回最新序号、帧年龄、宽高、关键点与分类。前端去重并拒绝过期帧。调试时 `preview=1` 附带同一帧 JPEG 的 Base64。`/api/frame` 保留兼容用途。
+
+包内模型位于 backend/models/gesture_recognizer.task。依赖必须预装到 Runtime 使用的 Python；特别保留系统 OpenCV 的 GStreamer 支持，详见项目 README。PC 另外提供 server.py 与 POST /api/infer。SmartApp 的 runtime_init、app_ready、app_stop 和 H5 game_result 上报格式保持不变。构建脚本支持 macOS/Linux。

@@ -24,7 +24,7 @@ const round=ref(engine.snapshot()),diagnostic=ref({hands:0,index:-1,ms:0,fps:0,g
 const motionHint=ref('waiting')
 const recording=ref(false),recordedFrames=ref(0),recordedSeconds=ref(0)
 let recordingData=null
-let stream,worker,session=0,raf=0,timer=0,watchdog=0,busy=false,recognizerReady=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0,frameWidth=0,frameHeight=0,startupFrame=0,startupTimer=0
+let stream,inferAbort,session=0,raf=0,timer=0,watchdog=0,busy=false,recognizerReady=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0,frameWidth=0,frameHeight=0,lastSequence=-1,startupFrame=0,startupTimer=0
 const outcomeText={win:['你赢了！','耶！你是出拳小高手'],lose:['你输了','没关系，再来挑战小汪吧！'],draw:['平局','再来一局吧！']}
 const visibleHands=computed(()=>['revealing','result'].includes(round.value.phase))
 const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
@@ -51,7 +51,7 @@ function finishRecording(reason='manual'){
   logEvent('recording_ended',`reason=${reason}`);recording.value=false
   recordingData.lines.push(`# ended=${new Date().toISOString()} duration_ms=${Math.round(performance.now()-recordingData.startedPerf)} reason=${reason}`)
 }
-function stop(){finishRecording('camera_stopped');session++;ready.value=false;loading.value=false;busy=false;recognizerReady=false;cancelAnimationFrame(raf);clearTimeout(timer);clearTimeout(watchdog);worker?.terminate();worker=null;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value){video.value.srcObject=null;video.value.src=''}resetInteraction()}
+function stop(){finishRecording('camera_stopped');session++;ready.value=false;loading.value=false;busy=false;recognizerReady=false;cancelAnimationFrame(raf);clearTimeout(timer);clearTimeout(watchdog);inferAbort?.abort();inferAbort=null;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value){video.value.srcObject=null;video.value.src=''}resetInteraction()}
 function fail(text){stop();error.value=text;message.value='摄像头需要帮个忙'}
 function closeCamera(){stop();error.value='摄像头已关闭。按 R 或“重连相机”可再次开启。';message.value='摄像头已关闭'}
 async function waitForServerCamera(token,timeoutMs=12000){
@@ -59,7 +59,7 @@ async function waitForServerCamera(token,timeoutMs=12000){
   let lastError='服务端摄像头未就绪'
   while(token===session&&performance.now()<deadline){
     try{
-      const response=await fetch(cameraApi('/api/status'),{cache:'no-store'})
+      const response=await fetch(cameraApi('/api/status'),{cache:'no-store',signal:AbortSignal.timeout(3000)})
       if(response.ok){const status=await response.json();if(status.ready)return;lastError=status.error||lastError}
       else lastError='服务端摄像头 API 未响应，请确认 backend 已启动。'
     }catch(e){lastError=e.message||lastError}
@@ -109,7 +109,7 @@ function recordFrame({timestamp,ms,result,index,handScores,fistCandidates,before
   if(recordedFrames.value>=4500)finishRecording('frame_limit')
 }
 async function start(){
-  stop();const token=session;error.value='';loading.value=true;message.value='正在连接摄像头…';lastVideoTime=-1;lastDispatch=0;frameWidth=0;frameHeight=0
+  stop();const token=session;error.value='';loading.value=true;message.value='正在连接摄像头…';lastVideoTime=-1;lastDispatch=0;frameWidth=0;frameHeight=0;lastSequence=-1
   try{
     if(useServerCamera){
       // 服务端模式只检查后端状态；实际帧由 capture() 按推理节奏请求。
@@ -128,48 +128,62 @@ async function start(){
       await video.value.play();if(token!==session)return
     }
 
-    message.value='小汪正在准备…';worker=new Worker(`${import.meta.env.BASE_URL}inference-worker.js`)
-    timer=setTimeout(()=>{if(token===session)fail('模型加载超时，请检查本地 models / vendor 文件。按 R 重试。')},60000)
-    worker.onerror=()=>{if(token===session)fail('识别引擎未能启动。请用 Chrome 并按 R 重试。')}
-    worker.onmessage=({data})=>{
-      if(token!==session)return
-      if(data.type==='ready'){
-        clearTimeout(timer);recognizerReady=true;message.value='正在校准识别…';lastResult=performance.now();fpsSince=lastResult;fpsCount=0;raf=requestAnimationFrame(capture)
-      }else if(data.type==='error')fail(`识别失败：${data.message}`)
-      else if(data.type==='result'){
-        clearTimeout(watchdog);busy=false
-        if(!ready.value){ready.value=true;loading.value=false;message.value='摄像头已就绪'}
-        receive(data)
-      }
+    message.value='正在连接 Python 识别服务…'
+    if(!useServerCamera){
+      inferAbort=new AbortController()
+      timer=setTimeout(()=>inferAbort?.abort(),10000)
+      const response=await fetch(cameraApi('/api/status'),{signal:inferAbort.signal})
+      if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw Error('请先运行 bash start-python.sh 启动 Python 识别服务')
+      const health=await response.json()
+      if(!health.ready)throw Error(health.error||'Python 模型未就绪')
     }
-    worker.postMessage({type:'init'})
+    if(token!==session)return
+    clearTimeout(timer);recognizerReady=true;lastResult=performance.now();fpsSince=lastResult;fpsCount=0;raf=requestAnimationFrame(capture)
   }catch(e){if(token!==session)return;fail(({NotAllowedError:'请由大人在浏览器地址栏允许摄像头，然后按 R 重试。',NotFoundError:'没有找到摄像头，连接摄像头后按 R 重试。',NotReadableError:'摄像头正被占用，请关闭其他摄像头页面后按 R 重试。'})[e.name]||e.message)}
 }
+const captureCanvas=document.createElement('canvas')
 async function capture(now){
   if(!recognizerReady)return
   raf=requestAnimationFrame(capture)
-  const muted=useServerCamera?false:stream?.getVideoTracks()[0]?.muted
-  if(document.hidden||muted||busy||now-lastDispatch<100)return
+  if(document.hidden||stream?.getVideoTracks()[0]?.muted||busy||now-lastDispatch<100)return
   if(!useServerCamera){
-    // 本地模式：检查 video 状态
     if(video.value.readyState<2||video.value.currentTime===lastVideoTime)return
     lastVideoTime=video.value.currentTime
   }
   busy=true;lastDispatch=now;const token=session
   try{
-    let bitmap
+    inferAbort=new AbortController()
+    watchdog=setTimeout(()=>inferAbort?.abort(),12000)
+    let response
     if(useServerCamera){
-      const response=await fetch(cameraApi('/api/frame?t='+Date.now()),{cache:'no-store',signal:AbortSignal.timeout(5000)})
-      if(!response.ok)throw Error(await response.text())
-      bitmap=await createImageBitmap(await response.blob())
+      // On the robot only landmarks are transferred unless diagnostics are open.
+      response=await fetch(cameraApi(`/api/recognition?preview=${debug.value?1:0}`),{cache:'no-store',signal:inferAbort.signal})
     }else{
-      bitmap=await createImageBitmap(video.value)
+      captureCanvas.width=video.value.videoWidth;captureCanvas.height=video.value.videoHeight
+      captureCanvas.getContext('2d').drawImage(video.value,0,0)
+      const blob=await new Promise(resolve=>captureCanvas.toBlob(resolve,'image/jpeg',.9))
+      if(token!==session)return
+      if(!blob)throw Error('摄像头帧编码失败')
+      response=await fetch(cameraApi('/api/infer'),{method:'POST',body:blob,signal:inferAbort.signal})
     }
-    if(token!==session){bitmap.close();return}
-    drawFrame(bitmap)
-    worker.postMessage({type:'frame',bitmap,timestamp:now},[bitmap])
-    watchdog=setTimeout(()=>{if(token===session)fail('识别超时，请按 R 重新连接。')},ready.value?12000:30000)
-  }catch(e){if(token===session)fail(`摄像头画面读取失败：${e.message}`)}
+    if(!response.ok)throw Error(`Python 识别接口 ${response.status}: ${await response.text()}`)
+    const data=await response.json()
+    if(token!==session)return
+    if(useServerCamera){
+      if(data.sequence===lastSequence){clearTimeout(watchdog);busy=false;return}
+      if(data.ageMs>1400)throw Error('摄像头识别帧已过期，请重连')
+      lastSequence=data.sequence;frameWidth=data.width;frameHeight=data.height
+      if(debug.value&&data.preview){
+        const bytes=Uint8Array.from(atob(data.preview),c=>c.charCodeAt(0))
+        const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}))
+        if(token!==session){bitmap.close();return}
+        drawFrame(bitmap);bitmap.close()
+      }
+    }else drawFrame(captureCanvas)
+    clearTimeout(watchdog);busy=false
+    if(!ready.value){ready.value=true;loading.value=false}
+    receive({...data,timestamp:useServerCamera?now-data.ageMs:now})
+  }catch(e){if(token===session)fail(`Python 识别失败：${e.message}`)}
 }
 function receive({result,ms,timestamp}){
   const muted=useServerCamera?false:stream?.getVideoTracks()[0]?.muted
@@ -271,7 +285,7 @@ onMounted(()=>{
   }
   window.addEventListener('keydown',keys);document.addEventListener('visibilitychange',visibility)
   clockId=setInterval(clockTick,80)
-  // Let the loading view reach the physical display before camera and WASM
+  // Let the loading view reach the physical display before camera and Python
   // initialization compete for CPU on the target device.
   startupFrame=requestAnimationFrame(()=>{startupFrame=0;startupTimer=setTimeout(()=>{startupTimer=0;start()},0)})
   const context=document.modelContext
@@ -306,6 +320,6 @@ onBeforeUnmount(()=>{cancelAnimationFrame(startupFrame);clearTimeout(startupTime
     </main>
     <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
     <button v-else-if="!debug&&!screenMode&&!smartAppMode" class="debug-open" @click="debug=true">摄像头调试 · D</button>
-    <aside class="debug-panel" :style="{display: debug ? 'block' : 'none'}"><div class="debug-heading"><strong>摄像头调试</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
+    <aside class="debug-panel" :style="{display: debug ? 'block' : 'none'}"><div class="debug-heading"><strong>摄像头调试 · Python</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
   </div>
 </template>
