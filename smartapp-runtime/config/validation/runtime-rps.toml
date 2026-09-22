@@ -1,7 +1,7 @@
 [paths]
-root = "/tmp/smartapp-runtime-rps-validation"
-socket = "/tmp/smartapp-runtime-rps-validation/run/runtime.sock"
-log = "/tmp/smartapp-runtime-rps-validation/logs/runtime.jsonl"
+root = "/tmp/runtime-data/rps-validation"
+socket = "/tmp/runtime-data/rps-validation/run/runtime.sock"
+log = "/tmp/runtime-data/rps-validation/logs/runtime.jsonl"
 python_executable = "/usr/bin/python3"
 
 [network]
@@ -34,14 +34,14 @@ protocol_violation_limit = 5
 [renderer]
 kind = "process"
 process_argv = [
-  "/mine/Code/ROS/dice/手势识别/smartapp-runtime/renderer/screen-runtime.sh",
+  "renderer/screen-runtime.sh",
   "{url}", "{session_id}", "{app_id}", "{version}"
 ]
 load_argv = []
 send_argv = []
 stop_argv = []
 restore_argv = [
-  "/mine/Code/ROS/dice/手势识别/smartapp-runtime/renderer/restore-expression.sh"
+  "renderer/restore-expression.sh"
 ]
 
 [logging]

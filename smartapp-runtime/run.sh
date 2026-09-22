@@ -6,12 +6,20 @@ set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 VENV_DIR="$SCRIPT_DIR/.venv"
-CONFIG_FILE="$SCRIPT_DIR/config/runtime.example.toml"
-PYTHON=${PYTHON:-python3}
+CONFIG_FILE="$SCRIPT_DIR/config/validation/runtime-rps.toml"
+PYTHON=${PYTHON:-python3.8}
+VENV_PYTHON="$VENV_DIR/bin/python"
+LOCAL_PACKAGE_CERT="/tmp/smartapp-rps-test.crt"
 
 echo "=========================================="
 echo "SmartApp Runtime 启动脚本"
 echo "=========================================="
+
+# 配置中的 Renderer 命令使用相对项目根目录的路径。
+cd "$SCRIPT_DIR"
+if [ -z "${SSL_CERT_FILE:-}" ] && [ -f "$LOCAL_PACKAGE_CERT" ]; then
+    export SSL_CERT_FILE="$LOCAL_PACKAGE_CERT"
+fi
 
 # 检查Python版本
 echo "📌 检查Python环境..."
@@ -39,10 +47,18 @@ else
     echo "✓ 虚拟环境已存在"
 fi
 
+if [ ! -x "$VENV_PYTHON" ]; then
+    echo "❌ 错误: 虚拟环境不可用: $VENV_PYTHON"
+    exit 1
+fi
+
+PYTHON_VERSION=$($VENV_PYTHON --version 2>&1 | awk '{print $2}')
+echo "✓ 虚拟环境Python版本: $PYTHON_VERSION"
+
 # 验证配置
 echo ""
 echo "🔍 验证配置文件..."
-PYTHONPATH="$SCRIPT_DIR/src" "$PYTHON" -m smartapp_runtime \
+PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PYTHON" -m smartapp_runtime \
     --config "$CONFIG_FILE" \
     --check-config
 
@@ -59,7 +75,7 @@ echo "=========================================="
 echo "🚀 启动 SmartApp Runtime"
 echo "=========================================="
 echo "配置文件: $CONFIG_FILE"
-echo "Unix Socket: /tmp/smartapp-runtime/run/runtime.sock"
+echo "Unix Socket: /tmp/runtime-data/rps-validation/run/runtime.sock"
 echo "静态Web服务: http://127.0.0.1:18080"
 echo "后端服务: http://127.0.0.1:18081"
 echo ""
@@ -68,5 +84,5 @@ echo "=========================================="
 echo ""
 
 # 前台运行
-PYTHONPATH="$SCRIPT_DIR/src" "$PYTHON" -m smartapp_runtime \
+PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PYTHON" -m smartapp_runtime \
     --config "$CONFIG_FILE"
