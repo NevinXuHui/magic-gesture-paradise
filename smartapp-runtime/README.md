@@ -72,7 +72,15 @@ sudo install -o root -g root -m 0644 \
 
 ### 验证应用控制
 
-先通过 `./run.sh` 启动验证 Runtime，再使用配置驱动的控制脚本管理应用：
+在 `smartapp-runtime` 目录中，先通过 `./run.sh` 启动验证 Runtime。该脚本会检查虚拟环境和配置，并在
+`https://127.0.0.1:18443` 启动本地 HTTPS 包服务，提供当前的 RPS 和 English 验证包，然后前台启动 Runtime：
+
+```bash
+cd smartapp-runtime
+./run.sh
+```
+
+验证 Runtime 启动后，另开终端使用配置驱动的控制脚本管理默认的 RPS 应用：
 
 ```bash
 ./test_client.sh status
@@ -82,7 +90,41 @@ sudo install -o root -g root -m 0644 \
 ./test_client.sh restart
 ```
 
-不传子命令时进入交互菜单。命令载荷来自 `config/validation/*.json`，所有请求均由 `examples/agent_client.py` 发送；修改会话、安装包或业务数据时应编辑对应 JSON 文件。`cloud-data.json` 的 `seq` 必须在同一会话中严格递增。
+RPS 启动成功后，可保持 Agent 连接并订阅每局游戏结果：
+
+```bash
+./test_client.sh rps listen
+```
+
+每局只推送一次 `game_result`。按 `Ctrl+C` 退出订阅：
+
+```json
+{"event":"app_data","sessionId":"rps-deploy-validation","appId":"rock_paper_scissors","dataType":"game_result","data":{"user":"fist","computer":"peace","outcome":"win","rounds":1}}
+```
+
+`user` 和 `computer` 使用 `fist`（石头）、`peace`（剪刀）、`palm`（布）；`outcome` 使用 `win`、`lose`、`draw`，均以玩家视角表示；`rounds` 是当前进程内完成的回合数。
+
+也可以操作 English SmartApp（项目目录为 `english`，应用 `appId` 仍为 `cloud_show_display`）：
+
+```bash
+./test_client.sh english status
+./test_client.sh english start
+./test_client.sh english cloud-data
+./test_client.sh english stop
+./test_client.sh english restart
+```
+
+`./test_client.sh status` 查询 Runtime 和当前应用状态；`Ctrl+C` 停止 `run.sh` 启动的 Runtime 及本地包服务。
+验证配置的运行根目录是相对 `smartapp-runtime` 的 `runtime-data/smartapp-runtime`，因此 socket 和日志分别位于
+`runtime-data/smartapp-runtime/run/runtime.sock` 与 `runtime-data/smartapp-runtime/logs/runtime.jsonl`，不会写入 `/tmp`。
+
+不传应用和子命令时进入交互菜单。命令载荷来自 `config/validation/rps/` 或
+`config/validation/english/`，所有请求均由
+`examples/agent_client.py` 发送；修改会话、安装包或业务数据时应编辑对应 JSON 文件。
+`test_client.sh` 发送 `cloud-data` 时会自动生成新的序列号，重复执行无需手工修改 JSON；直接编写 Agent 客户端时，
+`cloud_data.seq` 仍必须在同一会话中严格递增。
+`test_client.sh rps listen` 会保持 Agent 连接并只输出 RPS 的 `game_result`；按 `Ctrl+C` 退出。Runtime 同时只允许
+一个 Agent 客户端，因此监听期间不能从另一个终端执行 `status`、`stop` 等命令。
 
 ## Agent JSONL 协议
 
@@ -121,6 +163,17 @@ python3 "smartapp-runtime/examples/agent_client.py" \
   --socket "/tmp/smartapp-runtime/run/runtime.sock" \
   --json '{"requestId":"req-status-1","command":"get_status"}'
 ```
+
+也可直接持续订阅 RPS 游戏结果：
+
+```bash
+python3 "smartapp-runtime/examples/agent_client.py" \
+  --socket "smartapp-runtime/runtime-data/smartapp-runtime/run/runtime.sock" \
+  --listen --event app_data --data-type game_result --app-id rock_paper_scissors
+```
+
+上例使用的是通用生产配置中的 socket 路径；本地验证请使用配置计算出的
+`runtime-data/smartapp-runtime/run/runtime.sock`，或直接使用 `test_client.sh`。
 
 ## 应用包、Manifest 和组件协议
 

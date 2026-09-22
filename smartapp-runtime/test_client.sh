@@ -3,14 +3,18 @@ set -uo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 CONFIG_DIR="$SCRIPT_DIR/config/validation"
-RUNTIME_CONFIG="$CONFIG_DIR/runtime-rps.toml"
+RUNTIME_CONFIG="$CONFIG_DIR/runtime.toml"
 CLIENT="$SCRIPT_DIR/examples/agent_client.py"
 PYTHON=${PYTHON:-"$SCRIPT_DIR/.venv/bin/python"}
 SOCKET=''
 APP='rps'
+APP_ID='rock_paper_scissors'
 START_CONFIG='start-app.json'
 STOP_CONFIG='stop-app.json'
 CLOUD_CONFIG='cloud-data.json'
+APP_CONFIG_DIR="$CONFIG_DIR/rps"
+
+cd "$SCRIPT_DIR"
 
 usage() {
     cat <<'EOF'
@@ -26,6 +30,7 @@ usage() {
   restart      停止后重新启动应用
   status       查询 Runtime 和应用状态
   cloud-data   发送当前应用的 cloud_data
+  listen       持续订阅当前应用的 game_result
   data         cloud-data 的别名
   help         显示帮助
 
@@ -37,15 +42,19 @@ select_app() {
     case "$1" in
         rps)
             APP='rps'
+            APP_ID='rock_paper_scissors'
+            APP_CONFIG_DIR="$CONFIG_DIR/rps"
             START_CONFIG='start-app.json'
             STOP_CONFIG='stop-app.json'
             CLOUD_CONFIG='cloud-data.json'
             ;;
         english)
             APP='english'
-            START_CONFIG='english-start-app.json'
-            STOP_CONFIG='english-stop-app.json'
-            CLOUD_CONFIG='english-cloud-data.json'
+            APP_ID='cloud_show_display'
+            APP_CONFIG_DIR="$CONFIG_DIR/english"
+            START_CONFIG='start-app.json'
+            STOP_CONFIG='stop-app.json'
+            CLOUD_CONFIG='cloud-data.json'
             ;;
         *)
             fail "不支持的应用: $1（可选 rps 或 english）"
@@ -73,15 +82,39 @@ prepare() {
 send_config() {
     local name=$1
     local timeout=$2
-    local config_file="$CONFIG_DIR/$name"
+    local config_file
+    if [[ "$name" == "status.json" ]]; then
+        config_file="$CONFIG_DIR/status.json"
+    else
+        config_file="$APP_CONFIG_DIR/$name"
+    fi
     local status
+    local dynamic_payload
 
     [[ -r "$config_file" ]] || fail "命令配置不可读: $config_file"
     echo "发送配置: $config_file"
-    "$PYTHON" "$CLIENT" \
-        --socket "$SOCKET" \
-        --file "$config_file" \
-        --timeout "$timeout"
+    if [[ "$name" == "$CLOUD_CONFIG" ]]; then
+        dynamic_payload=$("$PYTHON" - "$config_file" "$(date +%s%N)" <<'PY'
+import json
+import sys
+
+path, sequence = sys.argv[1:]
+with open(path, encoding="utf-8") as stream:
+    payload = json.load(stream)
+payload["seq"] = int(sequence)
+print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+PY
+) || fail "无法生成 cloud_data 序列号"
+        "$PYTHON" "$CLIENT" \
+            --socket "$SOCKET" \
+            --json "$dynamic_payload" \
+            --timeout "$timeout"
+    else
+        "$PYTHON" "$CLIENT" \
+            --socket "$SOCKET" \
+            --file "$config_file" \
+            --timeout "$timeout"
+    fi
     status=$?
     echo
     return "$status"
@@ -104,6 +137,15 @@ run_command() {
         cloud-data|data)
             send_config "$CLOUD_CONFIG" 10
             ;;
+        listen)
+            echo "订阅 $APP 的 game_result，按 Ctrl+C 退出"
+            "$PYTHON" "$CLIENT" \
+                --socket "$SOCKET" \
+                --listen \
+                --event app_data \
+                --data-type game_result \
+                --app-id "$APP_ID"
+            ;;
         *)
             usage >&2
             return 2
@@ -121,15 +163,17 @@ SmartApp 应用控制
   3) 停止应用
   4) 发送云端数据
   5) 重启应用
+  6) 订阅游戏结果
   0) 退出
 EOF
-        read -r -p "选择操作 [0-5]: " choice || return 0
+        read -r -p "选择操作 [0-6]: " choice || return 0
         case "$choice" in
             1) run_command status || true ;;
             2) run_command start || true ;;
             3) run_command stop || true ;;
             4) run_command cloud-data || true ;;
             5) run_command restart || true ;;
+            6) run_command listen || true ;;
             0) return 0 ;;
             *) echo "无效选择: $choice" >&2 ;;
         esac

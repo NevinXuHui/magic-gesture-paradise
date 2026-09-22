@@ -6,15 +6,16 @@ set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 VENV_DIR="$SCRIPT_DIR/.venv"
-CONFIG_FILE="$SCRIPT_DIR/config/validation/runtime-rps.toml"
+CONFIG_FILE="$SCRIPT_DIR/config/validation/runtime.toml"
 PYTHON=${PYTHON:-python3.8}
 VENV_PYTHON="$VENV_DIR/bin/python"
 LOCAL_PACKAGE_CERT="$SCRIPT_DIR/smartapp-rps-test.crt"
 LOCAL_PACKAGE_KEY="$SCRIPT_DIR/smartapp-rps-test.key"
-RPS_PACKAGE_SOURCE="$SCRIPT_DIR/../rps-kids-h5/build/smartapp/rock_paper_scissors-0.1.3.tar.gz"
+RPS_PACKAGE_SOURCE="$SCRIPT_DIR/../rps-kids-h5/build/smartapp/rock_paper_scissors-0.1.5.tar.gz"
 ENGLISH_PACKAGE_SOURCE="$SCRIPT_DIR/../english/build/smartapp/cloud_show_display-0.2.0.tar.gz"
 LOCAL_PACKAGE_DIR=''
 PACKAGE_SERVER_PID=''
+PACKAGE_SERVER_LOG=''
 
 cleanup_package_server() {
     if [ -n "$PACKAGE_SERVER_PID" ] && kill -0 "$PACKAGE_SERVER_PID" 2>/dev/null; then
@@ -100,19 +101,22 @@ if [ ! -f "$RPS_PACKAGE_SOURCE" ] || [ ! -f "$ENGLISH_PACKAGE_SOURCE" ] \
 fi
 
 echo "📦 启动本地 HTTPS 包服务..."
-LOCAL_PACKAGE_DIR=$(mktemp -d /tmp/smartapp-validation-packages.XXXXXX)
-cp "$RPS_PACKAGE_SOURCE" "$LOCAL_PACKAGE_DIR/"
-cp "$ENGLISH_PACKAGE_SOURCE" "$LOCAL_PACKAGE_DIR/"
+# The package server only exposes validation inputs. Keep temporary links out of
+# runtime-data; packages are downloaded and installed by start_app on demand.
+LOCAL_PACKAGE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/smartapp-validation-packages.XXXXXX")
+PACKAGE_SERVER_LOG="$LOCAL_PACKAGE_DIR/server.log"
+ln -s "$RPS_PACKAGE_SOURCE" "$LOCAL_PACKAGE_DIR/$(basename "$RPS_PACKAGE_SOURCE")"
+ln -s "$ENGLISH_PACKAGE_SOURCE" "$LOCAL_PACKAGE_DIR/$(basename "$ENGLISH_PACKAGE_SOURCE")"
 "$VENV_PYTHON" "$SCRIPT_DIR/scripts/validation_package_server.py" \
     --directory "$LOCAL_PACKAGE_DIR" \
     --cert "$LOCAL_PACKAGE_CERT" \
     --key "$LOCAL_PACKAGE_KEY" \
-    > /tmp/smartapp-validation-package-server.log 2>&1 &
+    > "$PACKAGE_SERVER_LOG" 2>&1 &
 PACKAGE_SERVER_PID=$!
 for _ in $(seq 1 50); do
     if ! kill -0 "$PACKAGE_SERVER_PID" 2>/dev/null; then
         echo "❌ 本地 HTTPS 包服务启动失败" >&2
-        cat /tmp/smartapp-validation-package-server.log >&2 || true
+        cat "$PACKAGE_SERVER_LOG" >&2 || true
         exit 1
     fi
     if (echo >/dev/tcp/127.0.0.1/18443) 2>/dev/null; then
@@ -128,7 +132,7 @@ echo "=========================================="
 echo "🚀 启动 SmartApp Runtime"
 echo "=========================================="
 echo "配置文件: $CONFIG_FILE"
-echo "Unix Socket: /tmp/runtime-data/rps-validation/run/runtime.sock"
+echo "Unix Socket: runtime-data/smartapp-runtime/run/runtime.sock"
 echo "静态Web服务: http://127.0.0.1:18080"
 echo "后端服务: http://127.0.0.1:18081"
 echo ""

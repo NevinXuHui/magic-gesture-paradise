@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""向 SmartApp Runtime Unix 套接字发送一条 JSONL 命令。"""
+"""向 SmartApp Runtime 发送 JSONL 命令或持续订阅事件。"""
 
 import argparse
 import json
@@ -86,19 +86,36 @@ def _decode_response(payload: bytes) -> Dict[str, Any]:
         raise ClientError("服务端响应不是 UTF-8") from None
 
 
+def _matches_subscription(
+    response: Dict[str, Any],
+    event: Optional[str],
+    data_type: Optional[str],
+    app_id: Optional[str],
+) -> bool:
+    return (
+        (event is None or response.get("event") == event)
+        and (data_type is None or response.get("dataType") == data_type)
+        and (app_id is None or response.get("appId") == app_id)
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="发送一条 SmartApp Runtime JSONL 命令并等待对应结果"
+        description="发送 SmartApp Runtime JSONL 命令或持续订阅事件"
     )
     parser.add_argument("--socket", required=True, help="Runtime Unix 套接字路径")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--json", dest="json_text", help="JSON 对象字符串")
     source.add_argument("--file", help="UTF-8 JSON 文件；未指定 --json/--file 时读 stdin")
+    source.add_argument("--listen", action="store_true", help="保持连接并持续输出事件")
     parser.add_argument("--timeout", type=float, default=10.0, help="套接字超时秒数（默认 10）")
     parser.add_argument(
         "--max-line-bytes", type=int, default=1048576,
         help="单条输入/输出 JSONL 字节上限（默认 1048576）",
     )
+    parser.add_argument("--event", help="监听模式下按 event 过滤")
+    parser.add_argument("--data-type", help="监听模式下按 dataType 过滤")
+    parser.add_argument("--app-id", help="监听模式下按 appId 过滤")
     return parser
 
 
@@ -111,30 +128,59 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ):
         print("agent_client: timeout 和 max-line-bytes 必须为正数", file=sys.stderr)
         return 2
+    if not arguments.listen and any((arguments.event, arguments.data_type, arguments.app_id)):
+        print("agent_client: --event/--data-type/--app-id 只能与 --listen 一起使用", file=sys.stderr)
+        return 2
     try:
-        request = _parse_request(_read_source(arguments))
-        request_id = request["requestId"]
-        encoded = json.dumps(
-            request, ensure_ascii=False, separators=(",", ":"), allow_nan=False
-        ).encode("utf-8") + b"\n"
-        if len(encoded) > arguments.max_line_bytes:
-            raise ClientError("命令 JSONL 帧超过字节限制")
+        if arguments.listen:
+            request = None
+            request_id = None
+            encoded = None
+        else:
+            request = _parse_request(_read_source(arguments))
+            request_id = request["requestId"]
+            encoded = json.dumps(
+                request, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+            ).encode("utf-8") + b"\n"
+            if len(encoded) > arguments.max_line_bytes:
+                raise ClientError("命令 JSONL 帧超过字节限制")
 
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             connection.settimeout(arguments.timeout)
             connection.connect(arguments.socket)
-            connection.sendall(encoded)
+            if encoded is not None:
+                connection.sendall(encoded)
+            else:
+                connection.settimeout(None)
             with connection.makefile("rb") as stream:
                 while True:
                     response = _decode_response(
                         _recv_line(stream, arguments.max_line_bytes)
                     )
-                    print(json.dumps(response, ensure_ascii=False, separators=(",", ":")))
+                    if arguments.listen:
+                        if (
+                            response.get("event") == "command_result"
+                            and response.get("requestId") == "connection"
+                            and response.get("ok") is False
+                        ):
+                            message = response.get("error", {}).get("message", "连接被拒绝")
+                            raise ClientError(str(message))
+                        if not _matches_subscription(
+                            response, arguments.event, arguments.data_type, arguments.app_id
+                        ):
+                            continue
+                    print(
+                        json.dumps(response, ensure_ascii=False, separators=(",", ":")),
+                        flush=True,
+                    )
                     if (
-                        response.get("event") == "command_result"
+                        not arguments.listen
+                        and response.get("event") == "command_result"
                         and response.get("requestId") == request_id
                     ):
                         return 0 if response.get("ok") is True else 1
+    except KeyboardInterrupt:
+        return 0
     except (ClientError, OSError, socket.timeout, ValueError) as error:
         print("agent_client: {0}".format(error), file=sys.stderr)
         return 2

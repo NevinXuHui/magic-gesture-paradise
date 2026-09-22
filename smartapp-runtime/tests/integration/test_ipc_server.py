@@ -614,6 +614,28 @@ class AgentServerTests(unittest.IsolatedAsyncioTestCase):
             await self.server.start()
         self.assertTrue(self.socket_path.parent.is_symlink())
 
+    async def test_start_removes_stale_socket(self):
+        await self.server.stop()
+        stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            stale.bind(str(self.socket_path))
+        finally:
+            stale.close()
+
+        await self.server.start()
+
+        self.assertTrue(stat.S_ISSOCK(self.socket_path.lstat().st_mode))
+
+    async def test_start_refuses_socket_with_active_listener(self):
+        second = self.make_server()
+        try:
+            with self.assertRaises(Exception) as context:
+                await second.start()
+            self.assertIn("already in use", str(context.exception))
+            self.assertTrue(self.socket_path.exists())
+        finally:
+            await second.stop()
+
     async def test_stop_does_not_unlink_replaced_socket_inode(self):
         original = self.socket_path.lstat()
         self.socket_path.unlink()

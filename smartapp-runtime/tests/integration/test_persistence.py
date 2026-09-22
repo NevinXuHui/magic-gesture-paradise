@@ -176,7 +176,7 @@ class PersistenceTests(unittest.TestCase):
         self.assertFalse(paths.logs_root.exists())
 
     def test_lock_acquire_creates_missing_runtime_parent(self):
-        root = Path(self.temp.name) / "runtime-data" / "rps-validation"
+        root = Path(self.temp.name) / "runtime-data" / "smartapp-runtime"
         paths = RuntimePaths.from_root(root)
         lock = SingleInstanceLock(paths.lock_file)
 

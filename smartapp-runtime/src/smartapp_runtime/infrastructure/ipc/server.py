@@ -156,12 +156,7 @@ class AgentServer:
         if self._server is not None:
             return
         self._validate_or_create_parent()
-        try:
-            self._socket_path.lstat()
-        except FileNotFoundError:
-            pass
-        else:
-            raise SmartAppError(ErrorCode.INTERNAL_ERROR, "Agent socket path already exists")
+        self._remove_stale_socket()
 
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         listener.setblocking(False)
@@ -613,6 +608,37 @@ class AgentServer:
             return
         if not stat.S_ISDIR(node.st_mode) or stat.S_ISLNK(node.st_mode):
             raise SmartAppError(ErrorCode.INTERNAL_ERROR, "Agent socket parent is invalid")
+
+    def _remove_stale_socket(self) -> None:
+        try:
+            node = self._socket_path.lstat()
+        except FileNotFoundError:
+            return
+        if not stat.S_ISSOCK(node.st_mode):
+            raise SmartAppError(ErrorCode.INTERNAL_ERROR, "Agent socket path already exists")
+
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.settimeout(0.2)
+            probe.connect(str(self._socket_path))
+        except (ConnectionRefusedError, FileNotFoundError):
+            pass
+        except OSError as error:
+            raise SmartAppError(
+                ErrorCode.INTERNAL_ERROR, "Cannot determine whether agent socket is active"
+            ) from error
+        else:
+            raise SmartAppError(ErrorCode.INTERNAL_ERROR, "Agent socket is already in use")
+        finally:
+            probe.close()
+
+        try:
+            current = self._socket_path.lstat()
+        except FileNotFoundError:
+            return
+        if (current.st_dev, current.st_ino) != (node.st_dev, node.st_ino):
+            raise SmartAppError(ErrorCode.INTERNAL_ERROR, "Agent socket path changed during startup")
+        self._socket_path.unlink()
 
     def _unlink_owned_socket(self) -> None:
         if self._socket_identity is None:
