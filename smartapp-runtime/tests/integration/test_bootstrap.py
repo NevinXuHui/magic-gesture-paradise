@@ -238,6 +238,22 @@ class ConcreteAssemblyTests(unittest.IsolatedAsyncioTestCase):
         listener.close()
         self.assertTrue(_port_available("127.0.0.1", port))
 
+    async def test_port_probe_allows_rebind_during_time_wait(self):
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+
+        client = socket.create_connection(("127.0.0.1", port))
+        connection, _ = listener.accept()
+        connection.close()
+        client.recv(1)
+        client.close()
+        listener.close()
+
+        self.assertTrue(_port_available("127.0.0.1", port))
+
 
 class SignalAndCliTests(unittest.IsolatedAsyncioTestCase):
     async def test_installed_signal_handlers_set_event_and_are_removable(self):

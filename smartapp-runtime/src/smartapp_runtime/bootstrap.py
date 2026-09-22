@@ -51,6 +51,7 @@ def _port_available(host: str, port: int) -> bool:
         family = socket.AF_INET6 if address.version == 6 else socket.AF_INET
         probe = socket.socket(family, socket.SOCK_STREAM)
         try:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((host, port))
             return True
         finally:

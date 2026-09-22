@@ -175,6 +175,18 @@ class PersistenceTests(unittest.TestCase):
         self.assertFalse(paths.apps_root.exists())
         self.assertFalse(paths.logs_root.exists())
 
+    def test_lock_acquire_creates_missing_runtime_parent(self):
+        root = Path(self.temp.name) / "runtime-data" / "rps-validation"
+        paths = RuntimePaths.from_root(root)
+        lock = SingleInstanceLock(paths.lock_file)
+
+        lock.acquire()
+        self.addCleanup(lock.release)
+
+        self.assertTrue(root.parent.is_dir())
+        self.assertTrue(paths.state_root.is_dir())
+        self.assertTrue(paths.lock_file.is_file())
+
     def test_early_lock_rejects_symlink_root_or_state_parent(self):
         outside = Path(self.temp.name) / "early-outside"
         outside.mkdir()

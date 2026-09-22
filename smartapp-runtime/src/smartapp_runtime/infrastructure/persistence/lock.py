@@ -52,7 +52,7 @@ class SingleInstanceLock:
         ancestor_descriptor = None
         root_descriptor = None
         try:
-            ancestor_descriptor = open_directory(root_path.parent)
+            ancestor_descriptor = open_directory(root_path.parent, create_leaf=True)
             root_descriptor = open_child_directory(
                 ancestor_descriptor, root_path.name, create=True
             )
