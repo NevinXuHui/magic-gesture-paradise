@@ -8,7 +8,7 @@ log = "/tmp/smartapp-runtime/logs/runtime.jsonl"
 python_executable = "/usr/bin/python3"
 
 [network]
-# 只允许回环 IP 字面量；不接受主机名、0.0.0.0 或端口 0。
+# static_host 允许回环 IP 或 0.0.0.0；backend_host 仅允许回环 IP。
 static_host = "127.0.0.1"
 static_port = 18080
 backend_host = "127.0.0.1"

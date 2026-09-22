@@ -85,6 +85,12 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "loopback"):
                 load_config(path)
 
+    def test_accepts_unspecified_static_host(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = self.write_config(Path(raw), '[network]\nstatic_host = "0.0.0.0"\n')
+
+            self.assertEqual(load_config(path).network.static_host, "0.0.0.0")
+
     def test_rejects_boolean_port_and_ephemeral_toml_port(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

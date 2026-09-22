@@ -3,7 +3,7 @@ root = "runtime-data/smartapp-runtime"
 python_executable = "/usr/bin/python3"
 
 [network]
-static_host = "127.0.0.1"
+static_host = "0.0.0.0"
 static_port = 18080
 backend_host = "127.0.0.1"
 backend_port = 18081

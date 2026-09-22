@@ -189,10 +189,17 @@ def _load_network(values):
     for key in ("static_host", "backend_host"):
         host = _require_string("network", key, values.get(key, getattr(default, key)))
         try:
-            if not ipaddress.ip_address(host).is_loopback:
+            address = ipaddress.ip_address(host)
+            allow_unspecified = key == "static_host" and address.is_unspecified
+            if not address.is_loopback and not allow_unspecified:
                 raise ValueError
         except ValueError:
-            raise ConfigError("network.{0} must be a loopback IP literal".format(key))
+            requirement = (
+                "a loopback or unspecified IP literal"
+                if key == "static_host"
+                else "a loopback IP literal"
+            )
+            raise ConfigError("network.{0} must be {1}".format(key, requirement))
         loaded[key] = host
     for key in ("static_port", "backend_port"):
         port = values.get(key, getattr(default, key))

@@ -11,7 +11,7 @@ PYTHON=${PYTHON:-python3.8}
 VENV_PYTHON="$VENV_DIR/bin/python"
 LOCAL_PACKAGE_CERT="$SCRIPT_DIR/smartapp-rps-test.crt"
 LOCAL_PACKAGE_KEY="$SCRIPT_DIR/smartapp-rps-test.key"
-RPS_PACKAGE_SOURCE="$SCRIPT_DIR/../rps-kids-h5/build/smartapp/rock_paper_scissors-0.1.5.tar.gz"
+RPS_PACKAGE_SOURCE="$SCRIPT_DIR/../rps-kids-h5/build/smartapp/rock_paper_scissors-0.1.6.tar.gz"
 ENGLISH_PACKAGE_SOURCE="$SCRIPT_DIR/../english/build/smartapp/cloud_show_display-0.2.0.tar.gz"
 LOCAL_PACKAGE_DIR=''
 PACKAGE_SERVER_PID=''
@@ -133,7 +133,7 @@ echo "🚀 启动 SmartApp Runtime"
 echo "=========================================="
 echo "配置文件: $CONFIG_FILE"
 echo "Unix Socket: runtime-data/smartapp-runtime/run/runtime.sock"
-echo "静态Web服务: http://127.0.0.1:18080"
+echo "静态Web服务监听: http://0.0.0.0:18080"
 echo "后端服务: http://127.0.0.1:18081"
 echo ""
 echo "按 Ctrl+C 停止服务"

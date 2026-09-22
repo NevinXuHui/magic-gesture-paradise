@@ -1,4 +1,5 @@
 import ipaddress
+import http.client
 import math
 import mimetypes
 import re
@@ -63,6 +64,12 @@ class _StaticRequestHandler(BaseHTTPRequestHandler):
         if self.command in ("GET", "HEAD") and raw_path == "/healthz":
             self._send_response(200, "text/plain; charset=utf-8", b"ok\n", send_body)
             return
+        if raw_path.startswith("/api/"):
+            if self.command not in ("GET", "HEAD"):
+                self._method_not_allowed()
+                return
+            self._handle_api_proxy(send_body)
+            return
         try:
             root = self.server.owner.current_web_root()
         except Exception:
@@ -96,6 +103,16 @@ class _StaticRequestHandler(BaseHTTPRequestHandler):
             return
         content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
         self._send_response(200, content_type, content, send_body)
+
+    def _handle_api_proxy(self, send_body):
+        try:
+            status, content_type, body = self.server.owner.proxy_api(
+                self.command, self._raw_target.split("#", 1)[0]
+            )
+        except Exception:
+            self._send_response(502, "text/plain; charset=utf-8", b"", send_body=False)
+            return
+        self._send_response(status, content_type, body, send_body)
 
     def _resolve_file(self, root):
         relative = self._request_relative_path()
@@ -159,8 +176,10 @@ class StaticWebServer:
         host: str,
         port: int,
         shutdown_timeout: float,
+        backend_host: Optional[str] = None,
+        backend_port: Optional[int] = None,
     ) -> None:
-        self._validate_loopback_host(host)
+        self._validate_host(host)
         if type(port) is not int or not 0 <= port <= 65535:
             raise ValueError("static port must be an integer in 0..65535")
         if (type(shutdown_timeout) not in (int, float)
@@ -170,19 +189,46 @@ class StaticWebServer:
         self._host = host
         self._port = port
         self._shutdown_timeout = float(shutdown_timeout)
+        if (backend_host is None) != (backend_port is None):
+            raise ValueError("backend proxy host and port must be configured together")
+        if backend_host is not None:
+            try:
+                if not ipaddress.ip_address(backend_host).is_loopback:
+                    raise ValueError()
+            except (TypeError, ValueError):
+                raise ValueError("backend proxy host must be a loopback IP literal") from None
+            if type(backend_port) is not int or not 1 <= backend_port <= 65535:
+                raise ValueError("backend proxy port must be an integer in 1..65535")
+        self._backend_host = backend_host
+        self._backend_port = backend_port
         self._server = None
         self._thread = None
         self._lock = threading.RLock()
 
-    @staticmethod
-    def _validate_loopback_host(host: str) -> None:
-        if not isinstance(host, str):
-            raise ValueError("static host must be a loopback IP literal")
+    def proxy_api(self, method: str, target: str):
+        if self._backend_host is None or self._backend_port is None:
+            raise RuntimeError("backend proxy is not configured")
+        connection = http.client.HTTPConnection(
+            self._backend_host, self._backend_port, timeout=self._shutdown_timeout
+        )
         try:
-            if not ipaddress.ip_address(host).is_loopback:
+            connection.request("GET" if method == "HEAD" else method, target)
+            response = connection.getresponse()
+            content_type = response.getheader("Content-Type") or "application/octet-stream"
+            return response.status, content_type, response.read()
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _validate_host(host: str) -> None:
+        if not isinstance(host, str):
+            raise ValueError("static host must be a loopback or unspecified IP literal")
+        try:
+            address = ipaddress.ip_address(host)
+            if not address.is_loopback and not address.is_unspecified:
                 raise ValueError()
         except ValueError:
-            raise ValueError("static host must be a loopback IP literal") from None
+            raise ValueError("static host must be a loopback or unspecified IP literal") from None
 
     @property
     def address(self) -> Tuple[str, int]:

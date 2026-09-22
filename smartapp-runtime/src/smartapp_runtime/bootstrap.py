@@ -61,6 +61,9 @@ def _port_available(host: str, port: int) -> bool:
 
 
 def _static_base_url(host: str, port: int) -> str:
+    address = ipaddress.ip_address(host)
+    if address.is_unspecified:
+        host = "::1" if address.version == 6 else "127.0.0.1"
     rendered_host = "[" + host + "]" if ":" in host else host
     return "http://{0}:{1}".format(rendered_host, port)
 
@@ -162,6 +165,7 @@ def build_runtime(config: RuntimeConfig) -> RuntimeAssembly:
     static_server = StaticWebServer(
         pointers, config.network.static_host, config.network.static_port,
         config.timeouts.graceful_stop,
+        config.network.backend_host, config.network.backend_port,
     )
     supervisor = ProcessSupervisor(config, repository)
     if config.renderer.kind == "command":

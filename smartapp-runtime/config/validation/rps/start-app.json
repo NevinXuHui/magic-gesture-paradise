@@ -3,10 +3,10 @@
   "command": "start_app",
   "sessionId": "rps-deploy-validation",
   "appId": "rock_paper_scissors",
-  "version": "0.1.5",
-  "packageUrl": "https://127.0.0.1:18443/rock_paper_scissors-0.1.5.tar.gz",
-  "packageSize": 17921405,
-  "sha256": "388e47307944ebd835c2f809376ba762d686957ac12bc765e5f8b0d23d4667fe",
+  "version": "0.1.6",
+  "packageUrl": "https://127.0.0.1:18443/rock_paper_scissors-0.1.6.tar.gz",
+  "packageSize": 17920901,
+  "sha256": "0d9a00c18031e72443f324eb9f4fca5730a173e4b3c2989b63b889fd8ac1e96e",
   "initData": {
     "locale": "zh-CN",
     "validation": true

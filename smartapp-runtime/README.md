@@ -40,7 +40,7 @@ python3 -m venv "smartapp-runtime/.venv"
 
 ## 配置与运行
 
-[`config/runtime.example.toml`](config/runtime.example.toml) 列出了当前接受的全部配置键和默认值，主动示例使用 `/tmp` 和 `fake` Renderer；文件末尾还有已注释的 `/data/smartapp` 与实体屏 `process` Renderer 生产模板。网络 host 必须是回环 IP 字面量，端口必须在 1–65535，不接受主机名、`0.0.0.0` 或端口 0。
+[`config/runtime.example.toml`](config/runtime.example.toml) 列出了当前接受的全部配置键和默认值，主动示例使用 `/tmp` 和 `fake` Renderer；文件末尾还有已注释的 `/data/smartapp` 与实体屏 `process` Renderer 生产模板。`static_host` 允许回环 IP 或 `0.0.0.0`，`backend_host` 仅允许回环 IP；端口必须在 1–65535，不接受主机名或端口 0。
 
 只校验配置：
 

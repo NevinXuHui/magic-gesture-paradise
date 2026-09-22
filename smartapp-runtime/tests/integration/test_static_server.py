@@ -50,7 +50,9 @@ class StaticWebServerTests(unittest.TestCase):
         self.outside = Path(self.temp.name) / "outside.txt"
         self.outside.write_text("private", encoding="utf-8")
         (self.v1 / "escape.txt").symlink_to(self.outside)
-        self.server = StaticWebServer(self.counting_pointers, "127.0.0.1", 0, 1.0)
+        self.server = StaticWebServer(
+            self.counting_pointers, "127.0.0.1", 0, 1.0, "127.0.0.1", 18081
+        )
         self.started = False
         self.addCleanup(self.server.stop)
 
@@ -101,11 +103,17 @@ class StaticWebServerTests(unittest.TestCase):
         self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
         return response.status, headers, body
 
-    def test_address_requires_start_and_only_loopback_is_accepted(self):
+    def test_address_requires_start_and_only_local_bind_hosts_are_accepted(self):
         with self.assertRaisesRegex(RuntimeError, "not started"):
             _ = self.server.address
         with self.assertRaisesRegex(ValueError, "loopback"):
             StaticWebServer(self.pointers, "192.0.2.1", 0, 1.0)
+        wildcard = StaticWebServer(self.pointers, "0.0.0.0", 0, 1.0)
+        wildcard.start()
+        try:
+            self.assertEqual(wildcard.address[0], "0.0.0.0")
+        finally:
+            wildcard.stop()
 
     def test_healthz_get_and_head(self):
         status, headers, body = self.request("GET", "/healthz")
@@ -119,6 +127,43 @@ class StaticWebServerTests(unittest.TestCase):
         self.assertEqual(headers.get("Content-Length"), "3")
         self.assertEqual(body, b"")
         self.assertEqual(self.counting_pointers.calls, 0)
+
+    def test_proxies_api_requests_to_loopback_backend(self):
+        with patch.object(
+            self.server,
+            "proxy_api",
+            return_value=(200, "application/json", b'{"ready":true}'),
+        ) as proxy:
+            status, headers, body = self.request("GET", "/api/status?fresh=1")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Content-Type"), "application/json")
+        self.assertEqual(body, b'{"ready":true}')
+        self.assertEqual(self.counting_pointers.calls, 0)
+        proxy.assert_called_once_with("GET", "/api/status?fresh=1")
+
+    def test_api_proxy_failure_returns_bad_gateway(self):
+        with patch.object(self.server, "proxy_api", side_effect=OSError("backend unavailable")):
+            status, _, body = self.request("GET", "/api/status")
+
+        self.assertEqual(status, 502)
+        self.assertEqual(body, b"")
+
+    def test_api_proxy_connects_to_configured_backend(self):
+        with patch(
+            "smartapp_runtime.infrastructure.web.server.http.client.HTTPConnection"
+        ) as connection_type:
+            response = connection_type.return_value.getresponse.return_value
+            response.status = 200
+            response.getheader.return_value = "application/json"
+            response.read.return_value = b"{}"
+
+            result = self.server.proxy_api("GET", "/api/status")
+
+        self.assertEqual(result, (200, "application/json", b"{}"))
+        connection_type.assert_called_once_with("127.0.0.1", 18081, timeout=1.0)
+        connection_type.return_value.request.assert_called_once_with("GET", "/api/status")
+        connection_type.return_value.close.assert_called_once_with()
 
     def test_serves_current_root_assets_and_switches_roots_without_restart(self):
         self.pointers.set_current_web(self.v1)
