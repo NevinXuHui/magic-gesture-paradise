@@ -21,6 +21,10 @@ coverage/
 **/.venv/
 **/.venv-*/
 
+# Local SmartApp package-server certificate
+smartapp-runtime/smartapp-rps-test.crt
+smartapp-runtime/smartapp-rps-test.key
+
 # Claude Code
 .claude/
 .omc/
