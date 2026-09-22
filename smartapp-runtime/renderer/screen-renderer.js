@@ -12,6 +12,7 @@ const PAGE_HEIGHT = 480
 const FPS = Math.max(1, Number(process.env.SCREEN_FPS || 30))
 const OUTPUT_FIFO = process.env.SCREEN_FIFO || '/run/smartapp-renderer/video.nut'
 const MPV_SOCKET = process.env.MPV_SOCKET || '/tmp/mpv-socket'
+const EXPRESSION_READY_FILE = process.env.EXPRESSION_READY_FILE || ''
 const URL = process.env.SCREEN_URL || process.argv[2]
 const FFMPEG = process.env.FFMPEG_BIN || 'ffmpeg'
 
@@ -79,6 +80,15 @@ async function waitForMpvPath(expected, timeoutMs = 8000) {
   throw Error(`MPV 未加载 SmartApp FIFO，当前路径: ${currentPath || '<empty>'}`)
 }
 
+async function waitForExpressionReady(timeoutMs = 9000) {
+  if (!EXPRESSION_READY_FILE) return
+  const deadline = Date.now() + timeoutMs
+  while (!existsSync(EXPRESSION_READY_FILE)) {
+    if (Date.now() >= deadline) throw Error('ROS 表情关闭超时')
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+}
+
 function startEncoder(width, height) {
   if (encoder || stopping) return
   const transform = width === PAGE_WIDTH && height === PAGE_HEIGHT
@@ -111,6 +121,7 @@ async function claimDisplay() {
   if (readySent || claiming || !firstPaint || !pageLoaded || stopping) return
   claiming = true
   try {
+    await waitForExpressionReady()
     await mpvRequest(['set_property', 'hwdec', 'no'])
     await mpvRequest(['set_property', 'hwdec-codecs', 'no'])
     await mpvRequest(['set_property', 'loop-file', false])

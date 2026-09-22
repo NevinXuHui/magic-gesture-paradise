@@ -40,9 +40,11 @@ if ! mkdir -p "$SCREEN_RUNTIME_DIR" 2>/dev/null; then
   mkdir -p "$SCREEN_RUNTIME_DIR"
 fi
 FIFO_PATH="$SCREEN_RUNTIME_DIR/video.nut"
+EXPRESSION_READY_FILE="$SCREEN_RUNTIME_DIR/expression-ready"
 DISPLAY_NUMBER=${SCREEN_DISPLAY#:}
 XVFB_PID=''
 ELECTRON_PID=''
+EXPRESSION_PID=''
 
 cleanup() {
   trap - EXIT INT TERM
@@ -50,11 +52,17 @@ cleanup() {
     kill "$ELECTRON_PID" 2>/dev/null || true
     wait "$ELECTRON_PID" 2>/dev/null || true
   fi
+  if [[ -n "$EXPRESSION_PID" ]]; then
+    if kill -0 "$EXPRESSION_PID" 2>/dev/null; then
+      kill "$EXPRESSION_PID" 2>/dev/null || true
+    fi
+    wait "$EXPRESSION_PID" 2>/dev/null || true
+  fi
   if [[ -n "$XVFB_PID" ]] && kill -0 "$XVFB_PID" 2>/dev/null; then
     kill "$XVFB_PID" 2>/dev/null || true
     wait "$XVFB_PID" 2>/dev/null || true
   fi
-  rm -f "$FIFO_PATH" "/tmp/.X${DISPLAY_NUMBER}-lock"
+  rm -f "$FIFO_PATH" "$EXPRESSION_READY_FILE" "/tmp/.X${DISPLAY_NUMBER}-lock"
 }
 trap cleanup EXIT INT TERM
 
@@ -62,7 +70,7 @@ if [[ -e "/tmp/.X11-unix/X${DISPLAY_NUMBER}" ]]; then
   echo "显示号 ${SCREEN_DISPLAY} 已被占用" >&2
   exit 1
 fi
-rm -f "$FIFO_PATH" "/tmp/.X${DISPLAY_NUMBER}-lock"
+rm -f "$FIFO_PATH" "$EXPRESSION_READY_FILE" "/tmp/.X${DISPLAY_NUMBER}-lock"
 mkfifo "$FIFO_PATH"
 chmod 0600 "$FIFO_PATH"
 "$XVFB_BIN" "$SCREEN_DISPLAY" -screen 0 802x482x24 -nolisten tcp -ac \
@@ -74,9 +82,13 @@ for _ in {1..100}; do
 done
 [[ -e "/tmp/.X11-unix/X${DISPLAY_NUMBER}" ]] || { echo 'Xvfb 启动失败' >&2; exit 1; }
 
-"$RENDERER_DIR/disable-expression.sh" >/dev/null 2>&1 || true
+(
+  "$RENDERER_DIR/disable-expression.sh" >/dev/null 2>&1 || true
+  : >"$EXPRESSION_READY_FILE"
+) &
+EXPRESSION_PID=$!
 export DISPLAY="$SCREEN_DISPLAY" SCREEN_URL SCREEN_FPS SCREEN_FIFO="$FIFO_PATH"
-export FFMPEG_BIN MPV_SOCKET
+export FFMPEG_BIN MPV_SOCKET EXPRESSION_READY_FILE
 export MESA_GL_VERSION_OVERRIDE=3.3 MESA_GLSL_VERSION_OVERRIDE=330
 "$ELECTRON_BIN" --no-sandbox --user-data-dir="$SCREEN_RUNTIME_DIR/user-data" \
   "$RENDERER_DIR/screen-renderer.js" "$SCREEN_URL" <&0 &
