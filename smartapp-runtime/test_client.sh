@@ -1,103 +1,125 @@
-#!/bin/bash
-set -eu
+#!/usr/bin/env bash
+set -uo pipefail
 
-# SmartApp Runtime 测试客户端脚本
-# 用于快速测试Runtime各种命令
-
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-SOCKET="/tmp/smartapp-runtime/run/runtime.sock"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+CONFIG_DIR="$SCRIPT_DIR/config/validation"
+RUNTIME_CONFIG="$CONFIG_DIR/runtime-rps.toml"
 CLIENT="$SCRIPT_DIR/examples/agent_client.py"
-PYTHON=${PYTHON:-python3}
+PYTHON=${PYTHON:-"$SCRIPT_DIR/.venv/bin/python"}
+SOCKET=''
 
-echo "=========================================="
-echo "SmartApp Runtime 测试客户端"
-echo "=========================================="
+usage() {
+    cat <<'EOF'
+用法: ./test_client.sh <命令>
 
-# 检查socket是否存在
-if [ ! -S "$SOCKET" ]; then
-    echo "❌ Runtime未运行或Socket不存在: $SOCKET"
-    echo "请先运行: ./run.sh"
-    exit 1
-fi
+命令:
+  start        启动应用
+  stop         停止应用
+  restart      停止后重新启动应用
+  status       查询 Runtime 和应用状态
+  cloud-data   发送 config/validation/cloud-data.json
+  data         cloud-data 的别名
+  help         显示帮助
 
-echo "✓ Socket已连接: $SOCKET"
-echo ""
-
-# 显示菜单
-show_menu() {
-    echo "可用命令:"
-    echo "  1) 查询状态 (get_status)"
-    echo "  2) 启动应用 (start_app) - 示例"
-    echo "  3) 停止应用 (stop_app) - 示例"
-    echo "  4) 发送云端数据 (cloud_data) - 示例"
-    echo "  5) 自定义JSON命令"
-    echo "  0) 退出"
-    echo ""
+不传命令时进入交互菜单。所有请求均通过 examples/agent_client.py 发送。
+EOF
 }
 
-# 发送命令
-send_command() {
-    local json="$1"
-    echo "📤 发送命令:"
-    echo "$json" | "$PYTHON" -m json.tool 2>/dev/null || echo "$json"
-    echo ""
-    echo "📥 响应:"
-    "$PYTHON" "$CLIENT" --socket "$SOCKET" --json "$json"
-    echo ""
+fail() {
+    echo "test_client: $*" >&2
+    exit 2
 }
 
-# 主循环
-while true; do
-    show_menu
-    read -p "选择操作 [0-5]: " choice
-    echo ""
+prepare() {
+    [[ -x "$PYTHON" ]] || fail "Python 不可用: $PYTHON"
+    [[ -f "$CLIENT" ]] || fail "客户端不存在: $CLIENT"
+    [[ -r "$RUNTIME_CONFIG" ]] || fail "Runtime 配置不可读: $RUNTIME_CONFIG"
 
-    case $choice in
-        1)
-            send_command '{"requestId":"req-status-1","command":"get_status"}'
+    SOCKET=$(PYTHONPATH="$SCRIPT_DIR/src" "$PYTHON" -c \
+        'import sys; from smartapp_runtime.config import load_config; print(load_config(sys.argv[1]).paths.socket)' \
+        "$RUNTIME_CONFIG") || fail "无法读取 Runtime Socket 配置"
+    [[ -n "$SOCKET" ]] || fail "Runtime Socket 配置为空"
+    [[ -S "$SOCKET" ]] || fail "Runtime 未运行或 Socket 不存在: $SOCKET；请先执行 $SCRIPT_DIR/run.sh"
+}
+
+send_config() {
+    local name=$1
+    local timeout=$2
+    local config_file="$CONFIG_DIR/$name"
+    local status
+
+    [[ -r "$config_file" ]] || fail "命令配置不可读: $config_file"
+    echo "发送配置: $config_file"
+    "$PYTHON" "$CLIENT" \
+        --socket "$SOCKET" \
+        --file "$config_file" \
+        --timeout "$timeout"
+    status=$?
+    echo
+    return "$status"
+}
+
+run_command() {
+    case "$1" in
+        start)
+            send_config start-app.json 180
             ;;
-        2)
-            echo "示例: 启动 demo_app"
-            send_command '{
-                "requestId":"req-start-1",
-                "command":"start_app",
-                "sessionId":"session-demo-1",
-                "appId":"demo_app",
-                "version":"1.0.0",
-                "packageUrl":"https://packages.example.invalid/demo_app-1.0.0.tar.gz",
-                "packageSize":12345,
-                "sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "initData":{"locale":"zh-CN"}
-            }'
+        stop)
+            send_config stop-app.json 20
             ;;
-        3)
-            read -p "输入sessionId [session-demo-1]: " sid
-            sid=${sid:-session-demo-1}
-            send_command "{\"requestId\":\"req-stop-1\",\"command\":\"stop_app\",\"sessionId\":\"$sid\",\"reason\":\"operator\"}"
+        restart)
+            send_config stop-app.json 20 && send_config start-app.json 180
             ;;
-        4)
-            read -p "输入sessionId [session-demo-1]: " sid
-            sid=${sid:-session-demo-1}
-            send_command "{\"requestId\":\"req-data-1\",\"command\":\"cloud_data\",\"sessionId\":\"$sid\",\"seq\":1,\"target\":\"auto\",\"dataType\":\"gesture\",\"trigger\":\"cloud\",\"data\":{\"name\":\"rock\"}}"
+        status)
+            send_config status.json 10
             ;;
-        5)
-            echo "输入完整的JSON命令 (单行):"
-            read -r custom_json
-            if [ -n "$custom_json" ]; then
-                send_command "$custom_json"
-            else
-                echo "❌ 命令为空"
-            fi
-            ;;
-        0)
-            echo "👋 退出"
-            exit 0
+        cloud-data|data)
+            send_config cloud-data.json 10
             ;;
         *)
-            echo "❌ 无效选择"
+            usage >&2
+            return 2
             ;;
     esac
+}
 
-    read -p "按Enter继续..." dummy
-    echo ""
-done
+interactive_menu() {
+    local choice
+    while true; do
+        cat <<'EOF'
+SmartApp 应用控制
+  1) 查询状态
+  2) 启动应用
+  3) 停止应用
+  4) 发送云端数据
+  5) 重启应用
+  0) 退出
+EOF
+        read -r -p "选择操作 [0-5]: " choice || return 0
+        case "$choice" in
+            1) run_command status || true ;;
+            2) run_command start || true ;;
+            3) run_command stop || true ;;
+            4) run_command cloud-data || true ;;
+            5) run_command restart || true ;;
+            0) return 0 ;;
+            *) echo "无效选择: $choice" >&2 ;;
+        esac
+    done
+}
+
+if [[ $# -gt 1 ]]; then
+    usage >&2
+    exit 2
+fi
+if [[ ${1:-} == help || ${1:-} == --help || ${1:-} == -h ]]; then
+    usage
+    exit 0
+fi
+
+prepare
+if [[ $# -eq 0 ]]; then
+    interactive_menu
+else
+    run_command "$1"
+fi

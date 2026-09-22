@@ -70,6 +70,20 @@ sudo install -o root -g root -m 0644 \
 
 将独立的生产 TOML 放到 `/etc/smartapp-runtime/runtime.toml`。Unix 套接字在启动后强制为 `0660`；谁能连接由套接字父目录、专用用户/组和 systemd `UMask` 共同控制。
 
+### 验证应用控制
+
+先通过 `./run.sh` 启动验证 Runtime，再使用配置驱动的控制脚本管理应用：
+
+```bash
+./test_client.sh status
+./test_client.sh start
+./test_client.sh cloud-data
+./test_client.sh stop
+./test_client.sh restart
+```
+
+不传子命令时进入交互菜单。命令载荷来自 `config/validation/*.json`，所有请求均由 `examples/agent_client.py` 发送；修改会话、安装包或业务数据时应编辑对应 JSON 文件。`cloud-data.json` 的 `seq` 必须在同一会话中严格递增。
+
 ## Agent JSONL 协议
 
 Agent 通过配置的 Unix 套接字连接。协议是严格 UTF-8 JSON Lines：每帧必须是单个 JSON 对象并以 `\n` 结束，拒绝重复键、非有限数字、未知字段和超限帧。仅允许一个活动客户端。`requestId` 是 1–128 位可打印 ASCII，用于请求/结果关联。
