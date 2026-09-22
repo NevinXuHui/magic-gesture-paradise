@@ -1,0 +1,13 @@
+{
+  "requestId": "english-cloud-1",
+  "command": "cloud_data",
+  "sessionId": "english-validation",
+  "seq": 1,
+  "target": "web",
+  "dataType": "word",
+  "trigger": "validation",
+  "data": {
+    "word": "Apple",
+    "meaning": "苹果"
+  }
+}

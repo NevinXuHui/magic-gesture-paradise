@@ -1,0 +1,6 @@
+{
+  "requestId": "english-stop-1",
+  "command": "stop_app",
+  "sessionId": "english-validation",
+  "reason": "operator"
+}

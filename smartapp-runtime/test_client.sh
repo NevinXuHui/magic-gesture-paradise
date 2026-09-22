@@ -7,22 +7,50 @@ RUNTIME_CONFIG="$CONFIG_DIR/runtime-rps.toml"
 CLIENT="$SCRIPT_DIR/examples/agent_client.py"
 PYTHON=${PYTHON:-"$SCRIPT_DIR/.venv/bin/python"}
 SOCKET=''
+APP='rps'
+START_CONFIG='start-app.json'
+STOP_CONFIG='stop-app.json'
+CLOUD_CONFIG='cloud-data.json'
 
 usage() {
     cat <<'EOF'
-用法: ./test_client.sh <命令>
+用法: ./test_client.sh [应用] <命令>
+
+应用:
+  rps          操作 rps-kids-h5（默认）
+  english     操作 english SmartApp
 
 命令:
   start        启动应用
   stop         停止应用
   restart      停止后重新启动应用
   status       查询 Runtime 和应用状态
-  cloud-data   发送 config/validation/cloud-data.json
+  cloud-data   发送当前应用的 cloud_data
   data         cloud-data 的别名
   help         显示帮助
 
 不传命令时进入交互菜单。所有请求均通过 examples/agent_client.py 发送。
 EOF
+}
+
+select_app() {
+    case "$1" in
+        rps)
+            APP='rps'
+            START_CONFIG='start-app.json'
+            STOP_CONFIG='stop-app.json'
+            CLOUD_CONFIG='cloud-data.json'
+            ;;
+        english)
+            APP='english'
+            START_CONFIG='english-start-app.json'
+            STOP_CONFIG='english-stop-app.json'
+            CLOUD_CONFIG='english-cloud-data.json'
+            ;;
+        *)
+            fail "不支持的应用: $1（可选 rps 或 english）"
+            ;;
+    esac
 }
 
 fail() {
@@ -62,19 +90,19 @@ send_config() {
 run_command() {
     case "$1" in
         start)
-            send_config start-app.json 180
+            send_config "$START_CONFIG" 180
             ;;
         stop)
-            send_config stop-app.json 20
+            send_config "$STOP_CONFIG" 20
             ;;
         restart)
-            send_config stop-app.json 20 && send_config start-app.json 180
+            send_config "$STOP_CONFIG" 20 && send_config "$START_CONFIG" 180
             ;;
         status)
             send_config status.json 10
             ;;
         cloud-data|data)
-            send_config cloud-data.json 10
+            send_config "$CLOUD_CONFIG" 10
             ;;
         *)
             usage >&2
@@ -108,6 +136,10 @@ EOF
     done
 }
 
+if [[ ${1:-} == rps || ${1:-} == english ]]; then
+    select_app "$1"
+    shift
+fi
 if [[ $# -gt 1 ]]; then
     usage >&2
     exit 2
@@ -115,6 +147,10 @@ fi
 if [[ ${1:-} == help || ${1:-} == --help || ${1:-} == -h ]]; then
     usage
     exit 0
+fi
+
+if [[ $# -eq 0 ]]; then
+    select_app "$APP"
 fi
 
 prepare

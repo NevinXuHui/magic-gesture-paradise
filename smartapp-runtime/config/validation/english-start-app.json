@@ -1,0 +1,14 @@
+{
+  "requestId": "english-start-1",
+  "command": "start_app",
+  "sessionId": "english-validation",
+  "appId": "cloud_show_display",
+  "version": "0.2.0",
+  "packageUrl": "https://127.0.0.1:18443/cloud_show_display-0.2.0.tar.gz",
+  "packageSize": 50488,
+  "sha256": "25eaf711bb033298e03f6aab94a58ec87d8b9257788295084fea323796fc2841",
+  "initData": {
+    "locale": "zh-CN",
+    "validation": true
+  }
+}
