@@ -22,7 +22,7 @@ const round=ref(engine.snapshot()),diagnostic=ref({hands:0,index:-1,ms:0,fps:0,g
 const motionHint=ref('waiting')
 const recording=ref(false),recordedFrames=ref(0),recordedSeconds=ref(0)
 let recordingData=null
-let stream,worker,session=0,raf=0,timer=0,watchdog=0,busy=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0,frameWidth=0,frameHeight=0
+let stream,worker,session=0,raf=0,timer=0,watchdog=0,busy=false,recognizerReady=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0,frameWidth=0,frameHeight=0,startupFrame=0,startupTimer=0
 const outcomeText={win:['你赢了！','耶！你是出拳小高手'],lose:['你输了','没关系，再来挑战小汪吧！'],draw:['平局','再来一局吧！']}
 const visibleHands=computed(()=>['revealing','result'].includes(round.value.phase))
 const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
@@ -37,7 +37,7 @@ function finishRecording(reason='manual'){
   logEvent('recording_ended',`reason=${reason}`);recording.value=false
   recordingData.lines.push(`# ended=${new Date().toISOString()} duration_ms=${Math.round(performance.now()-recordingData.startedPerf)} reason=${reason}`)
 }
-function stop(){finishRecording('camera_stopped');session++;ready.value=false;loading.value=false;busy=false;cancelAnimationFrame(raf);clearTimeout(timer);clearTimeout(watchdog);worker?.terminate();worker=null;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value){video.value.srcObject=null;video.value.src=''}resetInteraction()}
+function stop(){finishRecording('camera_stopped');session++;ready.value=false;loading.value=false;busy=false;recognizerReady=false;cancelAnimationFrame(raf);clearTimeout(timer);clearTimeout(watchdog);worker?.terminate();worker=null;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value){video.value.srcObject=null;video.value.src=''}resetInteraction()}
 function fail(text){stop();error.value=text;message.value='摄像头需要帮个忙'}
 function closeCamera(){stop();error.value='摄像头已关闭。按 R 或“重连相机”可再次开启。';message.value='摄像头已关闭'}
 async function waitForServerCamera(token,timeoutMs=12000){
@@ -120,18 +120,22 @@ async function start(){
     worker.onmessage=({data})=>{
       if(token!==session)return
       if(data.type==='ready'){
-        clearTimeout(timer);ready.value=true;loading.value=false;message.value='摄像头已就绪';lastResult=performance.now();fpsSince=lastResult;fpsCount=0;raf=requestAnimationFrame(capture)
+        clearTimeout(timer);recognizerReady=true;message.value='正在校准识别…';lastResult=performance.now();fpsSince=lastResult;fpsCount=0;raf=requestAnimationFrame(capture)
       }else if(data.type==='error')fail(`识别失败：${data.message}`)
-      else if(data.type==='result'){clearTimeout(watchdog);busy=false;receive(data)}
+      else if(data.type==='result'){
+        clearTimeout(watchdog);busy=false
+        if(!ready.value){ready.value=true;loading.value=false;message.value='摄像头已就绪'}
+        receive(data)
+      }
     }
     worker.postMessage({type:'init'})
   }catch(e){if(token!==session)return;fail(({NotAllowedError:'请由大人在浏览器地址栏允许摄像头，然后按 R 重试。',NotFoundError:'没有找到摄像头，连接摄像头后按 R 重试。',NotReadableError:'摄像头正被占用，请关闭其他摄像头页面后按 R 重试。'})[e.name]||e.message)}
 }
 async function capture(now){
-  if(!ready.value)return
+  if(!recognizerReady)return
   raf=requestAnimationFrame(capture)
   const muted=useServerCamera?false:stream?.getVideoTracks()[0]?.muted
-  if(document.hidden||muted||busy||now-lastDispatch<66)return
+  if(document.hidden||muted||busy||now-lastDispatch<100)return
   if(!useServerCamera){
     // 本地模式：检查 video 状态
     if(video.value.readyState<2||video.value.currentTime===lastVideoTime)return
@@ -150,7 +154,7 @@ async function capture(now){
     if(token!==session){bitmap.close();return}
     drawFrame(bitmap)
     worker.postMessage({type:'frame',bitmap,timestamp:now},[bitmap])
-    watchdog=setTimeout(()=>{if(token===session)fail('识别超时，请按 R 重新连接。')},12000)
+    watchdog=setTimeout(()=>{if(token===session)fail('识别超时，请按 R 重新连接。')},ready.value?12000:30000)
   }catch(e){if(token===session)fail(`摄像头画面读取失败：${e.message}`)}
 }
 function receive({result,ms,timestamp}){
@@ -251,11 +255,14 @@ onMounted(()=>{
     round.value={phase:['win','lose','draw'].includes(previewScene)?'result':previewScene,...hands,outcome:previewScene,rounds:0};return
   }
   window.addEventListener('keydown',keys);document.addEventListener('visibilitychange',visibility)
-  clockId=setInterval(clockTick,80);start()
+  clockId=setInterval(clockTick,80)
+  // Let the loading view reach the physical display before camera and WASM
+  // initialization compete for CPU on the target device.
+  startupFrame=requestAnimationFrame(()=>{startupFrame=0;startupTimer=setTimeout(()=>{startupTimer=0;start()},0)})
   const context=document.modelContext
   if(context?.registerTool){const life=new AbortController();mcpCleanup=()=>life.abort();try{Promise.resolve(context.registerTool({name:'get_rps_game_status',description:'Read camera readiness and the visible round state without exposing the computer hand before reveal.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>({ready:ready.value,...engine.snapshot()})},{signal:life.signal})).catch(()=>{})}catch{}}
 })
-onBeforeUnmount(()=>{stop();clearInterval(clockId);mcpCleanup?.();window.removeEventListener('keydown',keys);document.removeEventListener('visibilitychange',visibility)})
+onBeforeUnmount(()=>{cancelAnimationFrame(startupFrame);clearTimeout(startupTimer);stop();clearInterval(clockId);mcpCleanup?.();window.removeEventListener('keydown',keys);document.removeEventListener('visibilitychange',visibility)})
 </script>
 
 <template>

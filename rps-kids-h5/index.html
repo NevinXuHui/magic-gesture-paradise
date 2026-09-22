@@ -1,1 +1,29 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#362454"><title>拳拳超人 · 剪刀石头布</title><meta name="description" content="摇摇拳头，和小狗伙伴玩剪刀石头布。800×480 无触摸手势小游戏。"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#362454">
+  <title>拳拳超人 · 剪刀石头布</title>
+  <meta name="description" content="摇摇拳头，和小狗伙伴玩剪刀石头布。800×480 无触摸手势小游戏。">
+  <style>
+    * { box-sizing: border-box; }
+    html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { display: grid; place-items: center; background: #080d20; color: #37254e; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .boot-screen { display: flex; width: min(100vw, 800px); height: min(100vh, 480px); align-items: center; justify-content: center; flex-direction: column; background: #f4edff; text-align: center; }
+    .boot-screen img { width: 118px; height: 118px; object-fit: contain; }
+    .boot-screen h1 { margin: 20px 0 8px; font-size: 28px; line-height: 1.25; }
+    .boot-screen p { margin: 0; color: #765f88; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <main class="boot-screen">
+      <img src="./art/dog_mascot.webp" alt="小汪">
+      <h1>拳拳超人</h1>
+      <p>正在准备游戏...</p>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
