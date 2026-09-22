@@ -1,7 +1,5 @@
 [paths]
-root = "/tmp/runtime-data/rps-validation"
-socket = "/tmp/runtime-data/rps-validation/run/runtime.sock"
-log = "/tmp/runtime-data/rps-validation/logs/runtime.jsonl"
+root = "runtime-data/smartapp-runtime"
 python_executable = "/usr/bin/python3"
 
 [network]

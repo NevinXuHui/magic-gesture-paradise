@@ -1,0 +1,14 @@
+{
+  "requestId": "deploy-start-1",
+  "command": "start_app",
+  "sessionId": "rps-deploy-validation",
+  "appId": "rock_paper_scissors",
+  "version": "0.1.5",
+  "packageUrl": "https://127.0.0.1:18443/rock_paper_scissors-0.1.5.tar.gz",
+  "packageSize": 17921405,
+  "sha256": "388e47307944ebd835c2f809376ba762d686957ac12bc765e5f8b0d23d4667fe",
+  "initData": {
+    "locale": "zh-CN",
+    "validation": true
+  }
+}
