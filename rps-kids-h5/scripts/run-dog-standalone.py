@@ -62,7 +62,7 @@ def main():
                                env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     try:
         init = {'event': 'runtime_init', 'sessionId': 'dog-standalone',
-                'appId': 'rock_paper_scissors', 'version': '0.1.9',
+                'appId': 'rock_paper_scissors', 'version': '0.1.11',
                 'data': {'cameraSource': args.camera_source}}
         process.stdin.write((json.dumps(init) + '\n').encode())
         process.stdin.flush()

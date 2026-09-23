@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "web": {
     "enabled": true,
     "entry": "index.html"
