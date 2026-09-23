@@ -52,6 +52,7 @@ except ImportError:
 try:
     from .claw_client_node import SpeechCoreClientNode
     from .logging_setup import setup_logging
+    from .runtime_link import RuntimeAgentLink
     from .hermes_utils import (
         format_message_for_xiaolichannel,
         strip_mention,
@@ -61,6 +62,7 @@ try:
 except ImportError:
     from claw_client.claw_client_node import SpeechCoreClientNode
     from claw_client.logging_setup import setup_logging
+    from claw_client.runtime_link import RuntimeAgentLink
     from claw_client.hermes_utils import (
         format_message_for_xiaolichannel,
         strip_mention,
@@ -229,7 +231,8 @@ class HermesBridge(SpeechCoreClientNode):
         # 游戏会话跟踪：新版 SmartApp Runtime 会话或旧版 cloud show 会话
         self._active_game_sessions: Dict[str, Dict[str, Any]] = {}
         self._game_sessions_lock = threading.Lock()
-        self._runtime_command_lock = threading.Lock()
+        self._runtime_upstream_queue = queue.Queue(maxsize=128)
+        self._runtime_upstream_seq: Dict[str, int] = {}
 
         # 游戏数据匹配队列：等待 ASR 确认后再下发 UDP
         # matchedText -> {data, timestamp, session_id, seq, event_id}
@@ -279,6 +282,17 @@ class HermesBridge(SpeechCoreClientNode):
             10
         )
         self.logger.info("订阅话题: /homi_speech/speech_assistant_status_topic")
+
+        self._runtime_link = RuntimeAgentLink(
+            self.smartapp_runtime_socket, self._on_runtime_event, self.logger
+        )
+        self._runtime_upstream_thread = threading.Thread(
+            target=self._forward_runtime_events,
+            name="smartapp-runtime-platform-forwarder",
+            daemon=True,
+        )
+        self._runtime_upstream_thread.start()
+        self._runtime_link.start()
 
         self.logger.info(
             f"HermesBridge 初始化完成: "
@@ -1407,30 +1421,65 @@ class HermesBridge(SpeechCoreClientNode):
         return self._send_game_udp("EXIT", tag)
 
     def _send_runtime_command(self, command: Dict[str, Any], timeout: float = 20.0) -> bool:
-        """Send one JSONL command to SmartApp Runtime and await its result."""
-        try:
-            with self._runtime_command_lock:
-                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-                    connection.settimeout(timeout)
-                    connection.connect(self.smartapp_runtime_socket)
-                    connection.sendall((json.dumps(command, ensure_ascii=False) + "\n").encode("utf-8"))
-                    with connection.makefile("rb") as stream:
-                        while True:
-                            line = stream.readline(1048577)
-                            if not line or len(line) > 1048576:
-                                raise ValueError("invalid Runtime response")
-                            result = json.loads(line)
-                            if (result.get("event") == "command_result"
-                                    and result.get("requestId") == command["requestId"]):
-                                if result.get("ok") is not True:
-                                    self.logger.error(
-                                        f"[smartapp_runtime] {command['command']} failed: {result.get('error')}"
-                                    )
-                                    return False
-                                return True
-        except (OSError, ValueError, TypeError, AttributeError) as exc:
-            self.logger.error(f"[smartapp_runtime] {command['command']} failed: {exc}")
+        result = self._runtime_link.send(command, timeout)
+        if result is None:
+            self.logger.error(f"[smartapp_runtime] {command['command']} timed out or disconnected")
             return False
+        if result.get("ok") is not True:
+            self.logger.error(f"[smartapp_runtime] {command['command']} failed: {result.get('error')}")
+            return False
+        return True
+
+    def _on_runtime_event(self, event: Dict[str, Any]) -> None:
+        session_id = event.get("sessionId")
+        data = event.get("data")
+        if not isinstance(session_id, str) or not session_id or type(data) is not dict:
+            self.logger.warning("[smartapp_runtime] invalid app_data event")
+            return
+        sequence = max(int(time.time() * 1000), self._runtime_upstream_seq.get(session_id, 0) + 1)
+        self._runtime_upstream_seq[session_id] = sequence
+        body = {"sessionId": session_id, "data": data}
+        if isinstance(event.get("dataType"), str) and event["dataType"]:
+            body["type"] = event["dataType"]
+        payload = {
+            "deviceId": self.device_id,
+            "domain": "DEVICE_ABILITY",
+            "event": "game_view_data",
+            "eventId": "robot-data-" + uuid.uuid4().hex,
+            "seq": sequence,
+            "body": body,
+        }
+        while not self._stop_event.is_set():
+            try:
+                self._runtime_upstream_queue.put(payload, timeout=0.2)
+                return
+            except queue.Full:
+                continue
+
+    def _forward_runtime_events(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                payload = self._runtime_upstream_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            encoded = json.dumps(payload, ensure_ascii=False)
+            while not self._stop_event.is_set():
+                completed = threading.Event()
+                result = []
+
+                def on_sent(error_code):
+                    result.append(error_code)
+                    completed.set()
+
+                self.send_async(encoded, callback=on_sent)
+                completed.wait(timeout=float(self.send_timeout_sec) + 1.0)
+                if result and result[0] == 0:
+                    break
+                self.logger.warning(
+                    f"[smartapp_runtime] game_view_data upload retry: eventId={payload['eventId']}"
+                )
+                self._stop_event.wait(2.0)
+            self._runtime_upstream_queue.task_done()
 
     def _process_smartapp_start(self, event_id: str, body: Dict[str, Any]) -> None:
         session_id = body.get("sessionId")
@@ -1500,9 +1549,15 @@ class HermesBridge(SpeechCoreClientNode):
 
     def _stop_running_game(self, reason: str) -> None:
         with self._game_sessions_lock:
-            if not self._active_game_sessions:
-                return
             sessions = list(self._active_game_sessions.items())
+        if not sessions:
+            status = self._runtime_link.send({
+                "requestId": uuid.uuid4().hex, "command": "get_status",
+            }, timeout=5.0)
+            if status and status.get("ok") is True and status.get("sessionId"):
+                stop_reason = "wake_word" if reason == "wake_word" else "operator"
+                self._stop_smartapp(status["sessionId"], stop_reason)
+            return
         for session_id, session in sessions:
             if session.get("runtime"):
                 stop_reason = "wake_word" if reason == "wake_word" else "operator"
@@ -2909,6 +2964,7 @@ class HermesBridge(SpeechCoreClientNode):
 
         # 停止标志
         self._stop_event.set()
+        self._runtime_link.close()
 
         with self._pending_responses_lock:
             for pending in self._pending_responses.values():
@@ -2934,6 +2990,9 @@ class HermesBridge(SpeechCoreClientNode):
 
         if self._message_processor_thread and self._message_processor_thread.is_alive():
             self._message_processor_thread.join(timeout=3)
+
+        if self._runtime_upstream_thread.is_alive():
+            self._runtime_upstream_thread.join(timeout=3)
 
         self.logger.info("HermesBridge 资源清理完成")
 
