@@ -3,11 +3,12 @@
   "command": "start_app",
   "sessionId": "rps-deploy-validation",
   "appId": "rock_paper_scissors",
-  "version": "0.1.6",
-  "packageUrl": "https://127.0.0.1:18443/rock_paper_scissors-0.1.6.tar.gz",
-  "packageSize": 17920901,
-  "sha256": "0d9a00c18031e72443f324eb9f4fca5730a173e4b3c2989b63b889fd8ac1e96e",
+  "version": "0.1.9",
+  "packageUrl": "https://127.0.0.1:18443/rock_paper_scissors-0.1.9.tar.gz",
+  "packageSize": 78556059,
+  "sha256": "c8b2b244a1e437377aea14f97af409a00ee726c8b6b99270c8b8558d9f6c9289",
   "initData": {
+    "cameraSource": "forehead",
     "locale": "zh-CN",
     "validation": true
   }

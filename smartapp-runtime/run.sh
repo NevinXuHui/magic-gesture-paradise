@@ -6,12 +6,13 @@ set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 VENV_DIR="$SCRIPT_DIR/.venv"
-CONFIG_FILE="$SCRIPT_DIR/config/validation/runtime.toml"
+CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config/validation/runtime.toml}"
 PYTHON=${PYTHON:-python3.8}
 VENV_PYTHON="$VENV_DIR/bin/python"
 LOCAL_PACKAGE_CERT="$SCRIPT_DIR/smartapp-rps-test.crt"
 LOCAL_PACKAGE_KEY="$SCRIPT_DIR/smartapp-rps-test.key"
-RPS_PACKAGE_SOURCE="$SCRIPT_DIR/../rps-kids-h5/build/smartapp/rock_paper_scissors-0.1.6.tar.gz"
+DEVICE_ELECTRON="/root/electron/node_modules/electron/dist/electron"
+RPS_PACKAGE_SOURCE="$SCRIPT_DIR/../rps-kids-h5/build/smartapp/rock_paper_scissors-0.1.9.tar.gz"
 ENGLISH_PACKAGE_SOURCE="$SCRIPT_DIR/../english/build/smartapp/cloud_show_display-0.2.0.tar.gz"
 LOCAL_PACKAGE_DIR=''
 PACKAGE_SERVER_PID=''
@@ -37,6 +38,14 @@ echo "=========================================="
 cd "$SCRIPT_DIR"
 if [ -z "${SSL_CERT_FILE:-}" ] && [ -f "$LOCAL_PACKAGE_CERT" ]; then
     export SSL_CERT_FILE="$LOCAL_PACKAGE_CERT"
+fi
+
+# Validation runs on the robot before the renderer's pinned Electron may have
+# been installed locally. Reuse the device Electron when it is available.
+if [ -z "${ELECTRON_BIN_OVERRIDE:-}" ] \
+    && [ ! -x "$SCRIPT_DIR/renderer/node_modules/electron/dist/electron" ] \
+    && [ -x "$DEVICE_ELECTRON" ]; then
+    export ELECTRON_BIN_OVERRIDE="$DEVICE_ELECTRON"
 fi
 
 # 本地验证包服务不应经过系统 HTTP(S) 代理。
@@ -91,6 +100,38 @@ if [ $? -eq 0 ]; then
     echo "✓ 配置验证通过"
 else
     echo "❌ 配置验证失败"
+    exit 1
+fi
+
+# Fail before starting the temporary package server when this runtime root is
+# already owned by another process. Use the runtime's lock implementation so
+# this check has the same path and filesystem safety rules as normal startup.
+RUNTIME_LOCK_FILE=$(PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PYTHON" -c '
+import sys
+from smartapp_runtime.config import load_config
+from smartapp_runtime.infrastructure.persistence.paths import RuntimePaths
+
+config = load_config(sys.argv[1])
+print(RuntimePaths.from_root(config.paths.root).lock_file)
+' "$CONFIG_FILE")
+
+if ! PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PYTHON" -c '
+import sys
+from pathlib import Path
+from smartapp_runtime.infrastructure.persistence.lock import SingleInstanceLock
+
+lock = SingleInstanceLock(Path(sys.argv[1]))
+lock.acquire()
+lock.release()
+' "$RUNTIME_LOCK_FILE" 2>/dev/null; then
+    LOCK_HOLDER=$(fuser "$RUNTIME_LOCK_FILE" 2>/dev/null | awk '{$1=$1; print}' || true)
+    echo ""
+    echo "❌ SmartApp Runtime 已在运行，或实例锁不可用" >&2
+    echo "实例锁: $RUNTIME_LOCK_FILE" >&2
+    if [ -n "$LOCK_HOLDER" ]; then
+        echo "持锁进程 PID: $LOCK_HOLDER" >&2
+    fi
+    echo "可执行 ./test_client.sh status 查询当前实例；先停止当前实例后才能重新启动。" >&2
     exit 1
 fi
 
