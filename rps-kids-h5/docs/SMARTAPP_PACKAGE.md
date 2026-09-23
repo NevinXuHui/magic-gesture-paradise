@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -72,7 +72,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.7.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.8.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -87,7 +87,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,
@@ -101,7 +101,7 @@ sha256=<64 位 SHA-256>
 ## 目标机要求
 
 - SmartApp Runtime 已启动，并配置真实 Renderer Controller。
-- `/usr/bin/python3` 已安装 OpenCV Python 绑定。
+- `/usr/bin/python3` 是 CPython 3.8.10，已安装 OpenCV Python 绑定；其他推理依赖已在归档的 `backend/vendor/`。
 - OpenCV 构建包含 GStreamer 支持。
 - 摄像头共享流位于 `/tmp/neck_jpeg`、`/tmp/foo_fhd` 或 `/tmp/neck_hd`。
 - `18080` 和 `18081` 回环端口未被其他进程占用。
@@ -110,8 +110,8 @@ sha256=<64 位 SHA-256>
 
 `start-local.sh` 和 `start-https.sh` 只用于浏览器本地开发，使用访问设备自己的摄像头。正式设备部署只分发 SmartApp tar.gz，不运行这两个脚本。
 
-## 0.1.7 Python 推理变更
+## 0.1.8 Python 推理变更
 
 模型由 backend/inference.py 使用原生 MediaPipe CPU 加载，不再在 Electron Worker 中加载 WASM。`/api/status` 仅在真实帧完成推理后 ready；`/api/recognition?preview=0` 返回最新序号、帧年龄、宽高、关键点与分类。前端去重并拒绝过期帧。调试时 `preview=1` 附带同一帧 JPEG 的 Base64。`/api/frame` 保留兼容用途。
 
-包内模型位于 backend/models/gesture_recognizer.task。依赖必须预装到 Runtime 使用的 Python；特别保留系统 OpenCV 的 GStreamer 支持，详见项目 README。PC 另外提供 server.py 与 POST /api/infer。SmartApp 的 runtime_init、app_ready、app_stop 和 H5 game_result 上报格式保持不变。构建脚本支持 macOS/Linux。
+包内模型位于 backend/models/gesture_recognizer.task。0.1.8 包内的 `backend/vendor/` 自带 CPython 3.8 / Linux ARM64 的 MediaPipe 0.10.9 和精简依赖；系统 OpenCV 必须保留 GStreamer 支持，详见项目 README。构建时可设置 `SMARTAPP_WHEELHOUSE=/path/to/wheels` 完全离线使用预下载的轮子。PC 另外提供 server.py 与 POST /api/infer。SmartApp 的 runtime_init、app_ready、app_stop 和 H5 game_result 上报格式保持不变。构建脚本支持 macOS/Linux；目标狗端的导入、模型推理和真实摄像头仍需实机验收。

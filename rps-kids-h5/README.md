@@ -40,9 +40,9 @@ bash start-python.sh
 
 本次复用已有模型、双手检测和 0.5 检测/跟踪阈值，保留已经调试的剪刀几何评分。模型约 8 MB，Python SDK 的安装体积另计。
 
-SmartApp 包携带 `backend/main.py`、`backend/inference.py`、`backend/requirements.txt` 和 `backend/models/gesture_recognizer.task`；不会打包本机 `.venv`。Runtime 启动 backend 所用的 Python 必须预先具备兼容的 MediaPipe 0.10.18、NumPy 1.x 和 **带 GStreamer 的系统 OpenCV**。PC `requirements.txt` 的 pip OpenCV wheel 不可直接覆盖狗端系统 cv2，否则共享内存采集会失效。
+SmartApp 0.1.8 包携带 `backend/main.py`、`backend/inference.py`、`backend/models/gesture_recognizer.task` 和 `backend/vendor/`。vendor 是 CPython 3.8 / Linux ARM64 的 MediaPipe 0.10.9 及精简依赖，不包含 Python 解释器或 OpenCV；机器人需要自带 **带 GStreamer 的系统 OpenCV**。Mac/PC 仍使用 MediaPipe 0.10.18。PC `requirements.txt` 的 pip OpenCV wheel 不可覆盖狗端系统 cv2，否则共享内存采集会失效。
 
-`backend/requirements.txt` 是模型依赖清单；MediaPipe 的传递依赖包含 pip OpenCV，所以机器人部署应由系统镜像统一准备并验证依赖，而不是在应用启动时直接 pip 安装。请在 Runtime 的同一个 Python 环境检查 `import mediapipe, cv2` 和 `cv2.getBuildInformation()` 中的 GStreamer 支持。ARM64 / Ubuntu 24.04 的实际安装与速度仍需目标设备验证；PC 验证不代表 RK3588 性能保证，本实现不使用 NPU。
+机器人依赖锁定在 `backend/requirements-robot.txt`。构建脚本下载匹配 Python 3.8 的 ARM64 wheels 并离线安装进包内 vendor，启动时无需网络或 pip。可设置 `SMARTAPP_WHEELHOUSE=/path/to/wheels npm run build:smartapp` 从本地轮子构建。请在狗端确认 `/usr/bin/python3` 为 3.8.10、`cv2.getBuildInformation()` 中 GStreamer 为 YES，并用实际摄像头流验收。PC 构建无法验证 RK3588 上的 OpenCV/NumPy ABI 和推理速度；本实现使用 CPU，不使用 NPU。
 
 ## 测试
 
@@ -62,7 +62,7 @@ npm run build:smartapp
 默认生成：
 
 ```text
-build/smartapp/rock_paper_scissors-0.1.7.tar.gz
+build/smartapp/rock_paper_scissors-0.1.8.tar.gz
 ```
 
 应用标识、版本和组件入口由 [manifest.json](manifest.json) 定义。脚本会执行 SmartApp 专用前端构建、目录组装和 Manifest 校验，并输出 `packageSize` 与 `sha256`。
@@ -109,3 +109,23 @@ manifest.json                   # SmartApp Runtime v1 清单
 ```
 
 素材授权说明见 [public/art/GENERATED-ASSETS.md](public/art/GENERATED-ASSETS.md) 和 [public/art/LICENSE-TWEMOJI.txt](public/art/LICENSE-TWEMOJI.txt)，模型信息见 [public/MODEL_INFO.json](public/MODEL_INFO.json)。
+
+## 精简 PC 推理环境（独立试用）
+
+完整环境保留不动，新建 `.venv-lean`，仅为本项目的 GestureRecognizer 推理安装已验证的依赖。不修改 MediaPipe 源码、不替换模型、不调整识别参数。
+
+```bash
+bash scripts/setup-lean.sh
+# 若未构建过前端，先 npm ci && npm run build
+bash start-lean.sh
+```
+
+打开 http://127.0.0.1:5185/?debug=1 。默认使用 5185，以免占用已有 5174 服务。需要指定端口可用 `PORT=5174 bash start-lean.sh`。同时测试两个版本时请先关闭另一个页面的摄像头。
+
+精简清单在 `requirements-lean.txt`，必须通过 `pip install --no-deps -r requirements-lean.txt` 安装，避免 pip 再拉入完整 SDK 依赖。脚本只操作 `.venv-lean`，不会卸载原环境的软件。Python 版本选择可用 `RPS_SETUP_PYTHON=/path/to/python3.11 bash scripts/setup-lean.sh`。
+
+省略 JAX/JAXLIB、SciPy、ml-dtypes、SoundDevice、SentencePiece：它们用于 SDK 的其他功能，当前手势路径不需要。保留 Matplotlib 及其依赖，因为 MediaPipe 0.10.18 顶层导入会加载绘图模块；直接删除会导致启动失败。标准 `pip check` 会报告 MediaPipe 声明的全功能依赖不完整，这是有意限制功能范围；不要以 `pip install mediapipe` 修复，否则会重新安装这些大包。使用 `scripts/check-lean.py` 和本项目真实推理测试验证此专用环境。
+
+本机 macOS ARM64 初次测量：完整环境约 773 MiB，精简环境约 388 MiB，均含 OpenCV、NumPy 和 Python 环境自带工具，不含项目已有的约 8 MiB 模型。省去约 385 MiB（约 50%）；安装后字节码缓存会带来小幅变化。该大小不是机器人 ARM64 Linux 的实测值。此清单含 pip OpenCV，仅用于 PC 测试；狗端必须保留带 GStreamer 的系统 OpenCV，不能直接套用。
+
+验证：`.venv-lean/bin/python -m unittest discover -s tests -p 'test_*.py'`。恢复完整版本只需停止精简服务，使用原来的 Python 环境及启动脚本；无需重新安装原环境。

@@ -30,8 +30,37 @@ mkdir -p "$APP_ROOT/web" "$APP_ROOT/backend" "$OUTPUT_DIR"
 cp -R dist/. "$APP_ROOT/web/"
 cp manifest.json "$APP_ROOT/manifest.json"
 cp backend/main.py backend/inference.py backend/requirements.txt "$APP_ROOT/backend/"
+cp backend/requirements-robot.txt "$APP_ROOT/backend/"
 mkdir -p "$APP_ROOT/backend/models"
 cp public/models/gesture_recognizer.task "$APP_ROOT/backend/models/"
+WHEELHOUSE=${SMARTAPP_WHEELHOUSE:-"$OUTPUT_DIR/wheelhouse-cp38-aarch64"}
+mkdir -p "$WHEELHOUSE"
+if [[ -n "${SMARTAPP_WHEELHOUSE:-}" ]]; then
+  python3 -m pip download --no-index --find-links "$WHEELHOUSE" --no-deps --only-binary=:all: \
+    --platform manylinux2014_aarch64 --implementation cp --python-version 38 --abi cp38 \
+    --dest "$WHEELHOUSE" -r backend/requirements-robot.txt
+else
+  python3 -m pip download --no-deps --only-binary=:all: \
+    --platform manylinux2014_aarch64 --implementation cp --python-version 38 --abi cp38 \
+    --dest "$WHEELHOUSE" -r backend/requirements-robot.txt
+fi
+python3 -m pip install --no-index --find-links "$WHEELHOUSE" --no-deps --only-binary=:all: \
+  --platform manylinux2014_aarch64 --implementation cp --python-version 38 --abi cp38 \
+  --target "$APP_ROOT/backend/vendor" -r backend/requirements-robot.txt
+python3 - "$APP_ROOT/backend/vendor" <<'PYVENDOR'
+from pathlib import Path
+import shutil, sys
+root = Path(sys.argv[1])
+for path in root.rglob('*'):
+    if path.is_dir() and path.name in ('__pycache__', 'test', 'tests'):
+        shutil.rmtree(path)
+for path in root.rglob('*.pyc'):
+    path.unlink()
+if any(root.glob('cv2*')):
+    raise SystemExit('错误：vendor 中不应包含 OpenCV')
+if not any(root.glob('mediapipe*.dist-info')) or not any(root.glob('numpy*.dist-info')):
+    raise SystemExit('错误：缺少 MediaPipe 或 NumPy Linux ARM64 依赖')
+PYVENDOR
 # Python owns the model; ship no browser inference assets in the web component.
 rm -rf "$APP_ROOT/web/vendor" "$APP_ROOT/web/models" "$APP_ROOT/web/inference-worker.js"
 

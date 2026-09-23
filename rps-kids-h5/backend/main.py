@@ -8,6 +8,12 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# SmartApp bundles Linux ARM64 / CPython 3.8 inference modules beside this file.
+# This does not include cv2: keep the robot's GStreamer-enabled system OpenCV.
+vendor_dir = os.path.join(os.path.dirname(__file__), "vendor")
+if os.path.isdir(vendor_dir):
+    sys.path.insert(0, vendor_dir)
+
 try:
     import cv2
 except ImportError as error:
