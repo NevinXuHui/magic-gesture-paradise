@@ -18,6 +18,8 @@ SmartApp Runtime :18080 -> H5 游戏（动画、摇拳/停稳、结果上报）
 
 Runtime 负责应用安装、静态服务、backend 生命周期和实体屏显示。Electron、FFmpeg、MPV 和表情恢复实现已经迁移到 `smartapp-runtime/renderer/`，不再由 H5 项目或应用包启动。
 
+机器人相机通过 `start_app.initData.cameraSource` 选择：`forehead` 使用额头 JPEG 共享流 `/tmp/foo_jpeg`，`neck` 使用领结 JPEG 共享流 `/tmp/neck_jpeg`。缺省为 `neck`；显式选择后不会在两个相机之间自动回退。额头流需要原厂 `/video_gst/get_video_service` 预先以 `{resolution: jpeg}` 开启。
+
 ## 本地 PC / Mac 运行
 
 建议 Python 3.11。首次安装和构建：
@@ -40,7 +42,7 @@ bash start-python.sh
 
 本次复用已有模型、双手检测和 0.5 检测/跟踪阈值，保留已经调试的剪刀几何评分。模型约 8 MB，Python SDK 的安装体积另计。
 
-SmartApp 0.1.8 包携带 `backend/main.py`、`backend/inference.py`、`backend/models/gesture_recognizer.task` 和 `backend/vendor/`。vendor 是 CPython 3.8 / Linux ARM64 的 MediaPipe 0.10.9 及精简依赖，不包含 Python 解释器或 OpenCV；机器人需要自带 **带 GStreamer 的系统 OpenCV**。Mac/PC 仍使用 MediaPipe 0.10.18。PC `requirements.txt` 的 pip OpenCV wheel 不可覆盖狗端系统 cv2，否则共享内存采集会失效。
+SmartApp 0.1.9 包携带 `backend/main.py`、`backend/inference.py`、`backend/models/gesture_recognizer.task` 和 `backend/vendor/`。vendor 是 CPython 3.8 / Linux ARM64 的 MediaPipe 0.10.9 及精简依赖，不包含 Python 解释器或 OpenCV；机器人需要自带 **带 GStreamer 的系统 OpenCV**。Mac/PC 仍使用 MediaPipe 0.10.18。PC `requirements.txt` 的 pip OpenCV wheel 不可覆盖狗端系统 cv2，否则共享内存采集会失效。
 
 机器人依赖锁定在 `backend/requirements-robot.txt`。构建脚本下载匹配 Python 3.8 的 ARM64 wheels 并离线安装进包内 vendor，启动时无需网络或 pip。可设置 `SMARTAPP_WHEELHOUSE=/path/to/wheels npm run build:smartapp` 从本地轮子构建。请在狗端确认 `/usr/bin/python3` 为 3.8.10、`cv2.getBuildInformation()` 中 GStreamer 为 YES，并用实际摄像头流验收。PC 构建无法验证 RK3588 上的 OpenCV/NumPy ABI 和推理速度；本实现使用 CPU，不使用 NPU。
 
@@ -62,7 +64,7 @@ npm run build:smartapp
 默认生成：
 
 ```text
-build/smartapp/rock_paper_scissors-0.1.8.tar.gz
+build/smartapp/rock_paper_scissors-0.1.9.tar.gz
 ```
 
 应用标识、版本和组件入口由 [manifest.json](manifest.json) 定义。脚本会执行 SmartApp 专用前端构建、目录组装和 Manifest 校验，并输出 `packageSize` 与 `sha256`。

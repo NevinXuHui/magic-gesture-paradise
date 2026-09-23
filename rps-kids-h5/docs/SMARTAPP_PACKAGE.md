@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -42,6 +42,12 @@ Runtime -> backend  app_stop
 ```
 
 stdout 只输出协议消息；运行日志写入 stderr。收到 `app_stop`、SIGTERM 或 SIGINT 后，backend 会停止 HTTP 服务和摄像头线程。
+
+`runtime_init.data.cameraSource` 用于选择摄像头，允许值为 `forehead` 和 `neck`，缺省为 `neck`。两者分别严格映射到 `/tmp/foo_jpeg` 和 `/tmp/neck_jpeg`，所选流不存在时不会回退到另一个相机。例如：
+
+```json
+{"event":"runtime_init","data":{"cameraSource":"forehead"}}
+```
 
 游戏结果由 H5 通过 Renderer Bridge 上报，不经过摄像头 backend：
 
@@ -72,7 +78,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.8.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.9.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -87,7 +93,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,
@@ -103,7 +109,8 @@ sha256=<64 位 SHA-256>
 - SmartApp Runtime 已启动，并配置真实 Renderer Controller。
 - `/usr/bin/python3` 是 CPython 3.8.10，已安装 OpenCV Python 绑定；其他推理依赖已在归档的 `backend/vendor/`。
 - OpenCV 构建包含 GStreamer 支持。
-- 摄像头共享流位于 `/tmp/neck_jpeg`、`/tmp/foo_fhd` 或 `/tmp/neck_hd`。
+- 领结 JPEG 共享流位于 `/tmp/neck_jpeg`；额头 JPEG 共享流位于 `/tmp/foo_jpeg`。
+- 额头模式启动前需调用 `/video_gst/get_video_service`，以 `{resolution: jpeg}` 开启额头 JPEG 流。
 - `18080` 和 `18081` 回环端口未被其他进程占用。
 
 ## 已有 Electron 云端展示框架的狗端试运行
@@ -113,8 +120,8 @@ sha256=<64 位 SHA-256>
 ```bash
 cd /home/unitree/magic-gesture-paradise/rps-kids-h5
 mkdir -p build/run
-tar -xzf build/smartapp/rock_paper_scissors-0.1.8.tar.gz -C build/run
-python3 scripts/run-dog-standalone.py
+tar -xzf build/smartapp/rock_paper_scissors-0.1.9.tar.gz -C build/run
+python3 scripts/run-dog-standalone.py --camera-source forehead
 ```
 
 狗屏加载 `/root/electron/push_cmd.sh http://127.0.0.1:18080/`，PC 在同一网络打开 `http://<狗IP>:18080/?debug=1`。服务将 `/api/` 同源转发给本机 Python 推理端口 18081，浏览器不加载 MediaPipe 模型。结束展示可执行 `/root/electron/push_cmd.sh EXIT`；停止服务则结束 `run-dog-standalone.py` 进程。该模式复用狗现有的 Electron 显示通道，不取代正式 SmartApp Runtime 的会话与 Agent 协议。

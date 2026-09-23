@@ -21,7 +21,10 @@ except ImportError as error:
     raise SystemExit(1) from error
 
 
-STREAM_PATHS = ("/tmp/neck_jpeg", "/tmp/foo_fhd", "/tmp/neck_hd")
+CAMERA_SOURCES = {
+    "forehead": {"name": "机器狗额头相机", "path": "/tmp/foo_jpeg"},
+    "neck": {"name": "机器狗领结相机", "path": "/tmp/neck_jpeg"},
+}
 state_lock = threading.Lock()
 stop_event = threading.Event()
 latest_frame = None
@@ -30,6 +33,7 @@ frame_sequence = 0
 inference = None
 latest_update = 0.0
 camera_problem = "等待摄像头初始化"
+camera_source = "neck"
 
 
 def log(message):
@@ -47,20 +51,36 @@ def set_problem(message):
         camera_problem = message
 
 
+def parse_camera_source(message):
+    data = message.get("data", {})
+    if type(data) is not dict:
+        raise ValueError("runtime_init.data must be an object")
+    source = data.get("cameraSource", "neck")
+    if type(source) is not str or source not in CAMERA_SOURCES:
+        raise ValueError("initData.cameraSource must be 'forehead' or 'neck'")
+    return source
+
+
+def selected_camera():
+    return CAMERA_SOURCES[camera_source]
+
+
 def find_stream():
-    return next((path for path in STREAM_PATHS if os.path.exists(path)), None)
+    path = selected_camera()["path"]
+    return path if os.path.exists(path) else None
 
 
 def capture():
     global latest_frame, latest_update, camera_problem, latest_recognition, frame_sequence
     while not stop_event.is_set():
+        camera = selected_camera()
         stream_path = find_stream()
         if stream_path is None:
-            set_problem("未找到机器狗摄像头共享流")
+            set_problem("{0}共享流 {1} 未开启".format(camera["name"], camera["path"]))
             stop_event.wait(1.0)
             continue
 
-        log("使用摄像头共享流 {0}".format(stream_path))
+        log("使用{0}共享流 {1}".format(camera["name"], stream_path))
         pipeline = (
             "shmsrc socket-path={0} is-live=true do-timestamp=true ! "
             "image/jpeg,width=1920,height=1080,framerate=30/1 ! "
@@ -72,7 +92,7 @@ def capture():
         capture_device = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
         try:
             if not capture_device.isOpened():
-                set_problem("机器狗摄像头共享流无法打开")
+                set_problem("{0}共享流无法打开：{1}".format(camera["name"], stream_path))
                 stop_event.wait(1.0)
                 continue
             while not stop_event.is_set() and capture_device.isOpened():
@@ -98,7 +118,7 @@ def capture():
         finally:
             capture_device.release()
         if not stop_event.is_set():
-            set_problem("额头相机流已断开，正在重连")
+            set_problem("{0}流已断开，正在重连".format(camera["name"]))
             stop_event.wait(1.0)
 
 
@@ -134,6 +154,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         with state_lock:
+            camera = selected_camera()
             ready = latest_frame is not None and time.monotonic() - latest_update < 3
             data = latest_frame if ready else None
             recognition = dict(latest_recognition) if ready and latest_recognition else None
@@ -144,8 +165,9 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(
                 {
                     "ready": ready,
-                    "camera": "机器狗额头相机",
-                    "source": "smartapp-backend",
+                    "camera": camera["name"],
+                    "cameraSource": camera_source,
+                    "source": camera["path"],
                     "bridge_frame_age_ms": age_ms,
                     "error": "" if ready else message,
                 },
@@ -185,10 +207,13 @@ def terminate(_signum, _frame):
 
 
 def main():
-    global inference
+    global camera_problem, camera_source, inference
     signal.signal(signal.SIGTERM, terminate)
     signal.signal(signal.SIGINT, terminate)
-    read_runtime_init()
+    camera_source = parse_camera_source(read_runtime_init())
+    camera = selected_camera()
+    camera_problem = "等待{0}共享流".format(camera["name"])
+    log("摄像头配置 {0} -> {1}".format(camera_source, camera["path"]))
     # Initialize before app_ready; stdout remains exclusively Runtime JSONL.
     from inference import Inference
     cv2.setNumThreads(1)

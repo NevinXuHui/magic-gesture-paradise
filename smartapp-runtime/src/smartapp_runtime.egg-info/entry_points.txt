@@ -1,2 +1,0 @@
-[console_scripts]
-smartapp-runtime = smartapp_runtime.__main__:main
