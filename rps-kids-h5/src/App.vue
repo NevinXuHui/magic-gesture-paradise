@@ -266,6 +266,7 @@ function clockTick(){
   const now=performance.now()
   if(now-lastResult>1400){resetInteraction();message.value='等待摄像头恢复画面';diagnostic.value={...diagnostic.value,fps:0};fpsCount=0;fpsSince=now;lastResult=now;return}
   const before=engine.phase;round.value=engine.update({now:performance.now(),handPresent:false})
+  if(before!=='result'&&round.value.phase==='result')publishGameResult(round.value)
   if(before!=='waiting'&&round.value.phase==='waiting'){target.reset();still.reset();shake.reset();shakeStop.reset();motionHint.value='waiting'}
 }
 function keys(e){
