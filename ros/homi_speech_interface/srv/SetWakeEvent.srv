@@ -1,0 +1,6 @@
+#目标唤醒事件状态
+#true开启语音唤醒，false关闭语音唤醒
+bool target
+---
+#返回当前唤醒事件状态
+bool current

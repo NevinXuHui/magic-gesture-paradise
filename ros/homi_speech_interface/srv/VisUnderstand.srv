@@ -1,0 +1,5 @@
+# 视觉理解服务
+# 调用此服务open为true向智话平台传输视频流，false关闭上行视频流
+bool open
+---
+bool status

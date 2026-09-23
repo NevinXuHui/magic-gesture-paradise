@@ -1,0 +1,32 @@
+# 查询版本信息统一服务
+# Get Version Information Service
+
+# 请求参数
+# Request Parameters
+
+# 查询类型：'system' | 'component' | 'all'
+string query_type
+
+# 组件名称（query_type=component时必须）
+string component_name
+
+# 组件类型过滤：'third_party' | 'algorithm' | 'business' | ''
+string component_type_filter
+
+---
+
+# 响应参数
+# Response Parameters
+
+# 是否成功
+bool success
+
+# 错误消息
+string message
+
+# 系统版本信息
+SystemVersionInfo system_info
+
+# 组件信息
+ComponentVersion component_info
+

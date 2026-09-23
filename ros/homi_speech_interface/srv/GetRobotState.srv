@@ -1,0 +1,17 @@
+# 查询机器人当前状态服务
+# Request: 无参数
+
+---
+# Response
+
+# 当前状态枚举值
+uint8 current_state
+
+# 状态名称（中文）
+string state_name
+
+# 操作是否成功
+bool success
+
+# 附加消息（错误信息或提示）
+string message

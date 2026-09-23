@@ -1,0 +1,7 @@
+# 获取视频流socket_path地址
+# 指定视频流分辨率 sd, hd, fhd
+string resolution
+---
+# 返回获取是否成功
+bool success
+string socket_path

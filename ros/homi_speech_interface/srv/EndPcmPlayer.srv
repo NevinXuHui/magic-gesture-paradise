@@ -1,0 +1,6 @@
+#释放pcm播放权限
+#str为topic名称
+string str
+---
+#返回权限释放状态，true为成功释放，false检查日志输出查看问题
+bool status

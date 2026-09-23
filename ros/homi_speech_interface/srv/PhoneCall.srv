@@ -1,0 +1,6 @@
+# 服务类型共三种：pickup, hangup, callout
+# callout需要传递电话号码
+string type
+string phone_number
+---
+int8 status

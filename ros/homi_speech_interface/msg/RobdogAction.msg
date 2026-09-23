@@ -1,0 +1,3 @@
+string actiontype
+string actionargument
+string sourcetype

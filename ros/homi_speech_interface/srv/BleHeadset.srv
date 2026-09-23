@@ -1,0 +1,5 @@
+# 蓝牙耳机连接调用服务发送true
+# 蓝牙耳机断开调用服务发送false
+bool ble
+---
+bool success

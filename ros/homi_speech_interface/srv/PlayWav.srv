@@ -1,0 +1,23 @@
+# 播放wav文件
+# url: wav文件的绝对路径
+# interrupt_current：true为打断正在播放的音频，false为不打断正在播放的音频
+# dedicat_player：true为独占播放（搭配打断interrupt_current使用，否则可能不满足独占条件），false为混音播放
+# cannot_interrupted：true为不可被后续音频文件播放打断，false为可以被后续音频文件播放打断
+# play_id: 播放预注册得到的play_id（选填，不填则内部分配播放id）
+string url
+bool interrupt_current
+bool dedicat_player
+bool cannot_interrupted
+int64 play_id
+---
+# 返回文件播放状态
+# 非负为播放成功，返回的值为播放Id，停止播放时传入此Id
+# -1为当前播放文件不接受打断
+# -2为不满足独占播放条件，需搭配interrupt_current使用
+# -3为当前播放音频独占了设备
+# -4为设置的play_id已在播放列表
+# -5为url路径不是一个文件
+# -6为url路径对应的文件头读取失败
+# -7为url路径对应的文件不是一个有效的wav文件
+# -8为音视频通话中不允许播放
+int64 ret

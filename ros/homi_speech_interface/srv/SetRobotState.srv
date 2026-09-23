@@ -1,0 +1,23 @@
+# 设置机器人状态服务
+# Request
+
+# 目标状态枚举值
+# 0: NORMAL, 1: MAPPING, 2: FOLLOWME, 3: MAP_INITIALIZING
+# 4: NAVIGATION, 5: OUTDOOR_TRIP, 6: PATROL, 7: GUARD
+# 8: CHARGING, 9: SUMMON, 10: PROGRRAMEXEC, 11: PILOT, 12: REMINDNAV
+uint8 desired_state
+
+# 可选：请求来源标识（用于权限控制和日志追踪）
+string requester_id
+
+---
+# Response
+
+# 操作是否成功
+bool success
+
+# 响应消息（成功提示或失败原因）
+string message
+
+# 实际设置后的状态（用于确认）
+uint8 actual_state

@@ -1,0 +1,3 @@
+int32 mode  # 0:关闭, 1:ASR+NLP, 2:仅ASR
+---
+int32 error_code

@@ -1,0 +1,15 @@
+# 停止指定Id的wav文件播放线程
+# 传入play_id为播放服务返回的非负值
+# /audio_center/stop_play中负值额外意义
+# -1: 停止speech_core
+# -2: 停止所有离线音频
+# -3: 停止speech_core和所有离线音频
+# ignore_flag: true忽略标志位强行打断
+int64 play_id
+bool ignore_flag
+---
+# 返回停止播放结果
+# 0:  成功/成功转发
+# -1: 无效play_id
+# -2: 该线程不允许打断
+int64 ret

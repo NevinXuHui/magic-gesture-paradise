@@ -1,0 +1,7 @@
+#具体数值对应操作参考vs_define中枚举类型VS_NR_Mode_e
+#引用vs_define.h文件，链接vs_define_trans.cc
+#函数nrModeToInt32、int32ToNrMode转换数据
+int32 vs_nr_mode
+---
+#返回服务结束时降噪模式
+int32 vs_nr_mode

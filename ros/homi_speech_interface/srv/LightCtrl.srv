@@ -1,0 +1,10 @@
+# 灯光控制服务
+# Request
+string color           # 颜色名称: orange, pink, white, yellow, blue, red, green, off
+string effect          # 效果类型: static(常亮), blink(闪烁), breath(呼吸), flow(流水)
+int32 duration         # 持续时间（秒），0表示持续到下次改变
+bool force_update      # 是否强制更新（忽略绑定状态检查）
+---
+# Response
+int32 error_code       # 错误码: 0=成功, 非0=失败
+string message         # 返回消息

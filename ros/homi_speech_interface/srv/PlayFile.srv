@@ -1,0 +1,5 @@
+string url
+#TODO: 模式优先级，比如是否停止其他播放
+int32 mode
+---
+int32 error_code

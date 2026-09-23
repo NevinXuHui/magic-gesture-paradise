@@ -1,0 +1,6 @@
+# 强制编码器生成IDR帧
+# 指定视频流分辨率 sd, hd, fhd
+string resolution
+---
+# 返回获取是否成功
+bool success

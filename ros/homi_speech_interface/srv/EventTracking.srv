@@ -1,0 +1,12 @@
+# Request
+string action_type
+string action_argument
+string body_event
+string body_action
+string event_id
+string event_type
+string source_type
+---
+# Response
+bool success
+string message

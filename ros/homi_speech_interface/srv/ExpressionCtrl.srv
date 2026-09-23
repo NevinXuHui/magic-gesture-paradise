@@ -1,0 +1,12 @@
+# 表情控制服务
+# Request
+string expression_name    # 表情名称，如: happy, angry, cry, like 等
+int32 play_count         # 播放次数，默认1次
+bool immediate           # 是否立即播放
+bool bind_status         # 是否绑定状态
+bool force_update        # 是否强制更新
+---
+# Response
+int32 error_code         # 错误码: 0=成功, 非0=失败
+string message           # 返回消息
+string video_path        # 实际播放的视频路径

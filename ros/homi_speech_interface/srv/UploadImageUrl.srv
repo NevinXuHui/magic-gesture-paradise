@@ -1,0 +1,4 @@
+int32 file_size
+---
+string url
+int32 error_code

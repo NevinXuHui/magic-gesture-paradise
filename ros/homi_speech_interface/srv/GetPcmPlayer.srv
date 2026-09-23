@@ -1,0 +1,6 @@
+#获取pcm播放权限
+#str为topic名称
+string str
+---
+#返回能否传输数据，true/false
+bool status

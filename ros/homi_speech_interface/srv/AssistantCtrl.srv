@@ -1,0 +1,15 @@
+bool is_normal
+bool is_asr
+bool start
+bool stop
+int32 start_wait_ms
+int32 stop_wait_ms
+string inquiry_text
+int32 inquiry_sub_type
+bool  mutiple_wheels
+bool  notify_user_abort
+string inquiry_tts
+string inquiry_nlu
+---
+string event_id
+int32 error_code

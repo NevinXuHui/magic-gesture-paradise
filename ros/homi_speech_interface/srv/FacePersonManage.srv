@@ -1,0 +1,17 @@
+# 人员管理服务
+# cmd: add, update, delete, query
+string cmd
+int64 person_id           # 人员ID（add时不需要传，update/delete时必传）
+string name               # 姓名（query时可用于搜索）
+string phone              # 手机号
+string birthday           # 生日
+string face_image_url     # 人脸照片URL
+string face_image_path    # 人脸图片本地路径（用于提取特征）
+string welcome_text       # 欢迎语
+string welcome_audio_path # 欢迎语音频路径
+string remark             # 备注
+---
+bool success
+string message
+int64 person_id           # 返回的人员ID（add时返回新增的ID）
+string data               # 查询结果（JSON格式）

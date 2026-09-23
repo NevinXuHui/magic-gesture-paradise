@@ -1,0 +1,9 @@
+# 运动技能控制服务
+# Request
+string skill_name      # 技能名称，如: standUp, getDown, happy, greeting 等
+bool media_switch      # 是否播放音视频灯光效果
+string source_type     # 来源类型（可选）
+---
+# Response
+int32 error_code       # 错误码: 0=成功, 非0=失败
+string message         # 返回消息

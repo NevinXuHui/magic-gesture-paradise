@@ -1,0 +1,3 @@
+string new_devip_str
+int32 new_remote_port
+int32 new_local_port

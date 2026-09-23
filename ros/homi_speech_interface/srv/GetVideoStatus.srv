@@ -1,0 +1,19 @@
+# Request - 查询播放状态请求
+# 可以指定查询的属性，如果为空则返回所有状态信息
+string[] properties  # 可选：指定要查询的属性列表 ["filename", "status", "time_position", "duration"]
+
+---
+
+# Response - 播放状态响应
+bool success                    # 查询是否成功
+string message                  # 错误信息或状态描述
+string status_json             # JSON格式的完整状态信息
+
+# 单独的状态字段（便于直接访问）
+string filename                # 当前播放的文件名
+string full_path              # 完整文件路径
+string playback_status        # 播放状态: playing/paused/stopped/error
+float64 time_position         # 当前播放位置(秒)
+float64 duration              # 视频总时长(秒)
+float64 progress              # 播放进度(0.0-1.0)
+int64 timestamp               # 状态查询时间戳

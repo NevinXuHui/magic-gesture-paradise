@@ -1,0 +1,26 @@
+# 按类型列表查询组件
+# List Components By Type Service
+
+# 请求参数
+# Request Parameters
+
+# 组件类型：'third_party' | 'algorithm' | 'business' | ''
+string component_type
+
+---
+
+# 响应参数
+# Response Parameters
+
+# 是否成功
+bool success
+
+# 错误消息
+string message
+
+# 组件列表
+ComponentVersion[] components
+
+# 组件总数
+int32 total_count
+

@@ -1,0 +1,30 @@
+# Request - 表情配置请求
+# action: get(获取配置) / set(设置配置)
+string action
+
+# 设置时使用的字段（action=set时有效）
+# 注意：default_video 和 default_image 互斥，只能二选一
+# 设置 default_video 会自动切换到视频模式
+# 设置 default_image 会自动切换到图片模式
+string default_video           # 默认视频路径（与default_image互斥）
+string default_image           # 默认图片路径（与default_video互斥）
+# 使用字符串表示开关状态："true"=启用, "false"=禁用, ""=保持不变
+string expression_enabled      # 是否启用表情更新
+string status_publish_enabled  # 是否启用状态发布
+
+---
+
+# Response - 表情配置响应
+bool success                   # 操作是否成功
+string message                 # 状态描述或错误信息
+
+# 当前配置（action=get时返回，action=set时返回更新后的配置）
+# 注意：current_default_video 和 current_default_image 互斥
+# 只有当前模式对应的字段有值，另一个为空字符串
+string current_default_video   # 当前默认视频路径（图片模式时为空）
+string current_default_image   # 当前默认图片路径（视频模式时为空）
+bool use_default_image         # 当前是否使用图片模式（true=图片模式，false=视频模式）
+bool expression_enabled        # 表情更新是否启用
+bool status_publish_enabled    # 状态发布是否启用
+string current_media           # 当前正在播放的媒体路径
+string playback_status         # 播放状态: playing/paused/stopped

@@ -1,0 +1,7 @@
+# user:Ntrip账号
+# user:Ntrip密码
+string user
+string pwd
+---
+# 返回状态
+int64 status

@@ -1,0 +1,8 @@
+#获取播放器状态（用于检测当前播放器是否处于播放状态）
+#循环调用该服务查询时控制查询频率，播放器状态每10ms可能发生一次变化
+#无需入参
+---
+#返回播放器状态
+#Open、Setup、Prepared、Running、XRun(underrun)、Draining、Paused、Suspended、Disconnected、Unknown
+#Running表示正在播放声音、XRun(underrun)表示等待播放数据
+string status

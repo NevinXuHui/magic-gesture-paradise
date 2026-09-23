@@ -1,0 +1,5 @@
+float32 max_linear_vel
+float32 max_angular_vel
+float32 target_linear_vel
+float32 target_angular_vel
+float32 goal_dist_tol 

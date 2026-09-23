@@ -1,0 +1,6 @@
+# 释放视频流资源
+# 指定视频流分辨率 sd, hd, fhd
+string resolution
+---
+# 返回释放否成功
+bool success

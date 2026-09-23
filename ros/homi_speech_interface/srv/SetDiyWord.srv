@@ -1,0 +1,6 @@
+#设置自定义唤醒词
+#str为topic名称
+string wakeup_word
+---
+int8 status
+string enable_ww

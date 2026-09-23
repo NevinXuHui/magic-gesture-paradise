@@ -1,0 +1,74 @@
+/hermes_bridge:
+  ros__parameters:
+    # HTTP 服务器配置
+    server_host: '0.0.0.0'      # 监听地址
+    server_port: 8800           # 监听端口
+
+    # XiaoliChannel 认证（需要与 Hermes Gateway 配置一致）
+    app_id: '591884'
+    app_secret: 'fdcc37131e9965f3481db47c035042da'
+
+    # 消息处理
+    # app_msg_request 响应超时（秒）：收到非最终 device_msg_response 后会重新计时，收到最终 stop 后清除
+    message_timeout_sec: 60
+    enable_streaming: true      # 是否启用流式编辑（编辑消息）
+    # 是否将语音助手最终 ASR 解析结果推送给 XiaoliChannel / Hermes Gateway
+    # true: 最终 ASR 作为用户输入进入 Hermes 对话链路
+    # false: 仅记录日志，不推送（平台文本请求仍正常处理）
+    forward_asr_to_channel: false
+
+    # 寻物：平台 DEVICE_ABILITY/item_search → 发布到此话题
+    # 消息 std_msgs/String.data = {"SN":"...","prompt":"...","scene":"..."}
+    findobj_search_topic: '/findobj/search_start'
+    # 寻物状态回传：订阅此话题，终态时回平台 item_search 响应
+    # 消息 std_msgs/String.data JSON：{"SN","status","prompt","scene","msg"...}
+    # status 码：
+    #   功能类 00收到开启 01云端通信失败 02云端接流失败 09初始化成功开始推理
+    #   过程类 10发现目标靠近 11搜完未发现 12靠近丢失 13到达目标旁 14拉流异常
+    #          19本轮结束 21重定位成功开始导航 22到达导航点位 23找到目标 24未找到目标
+    #          25下发scene与列表不匹配(终止寻物) 26旋转中仔细找
+    #          27原地找物未找到 28当前点位没有去下一地点
+    # 终态(回传平台): 01/02/11/12/13/14/19/25
+    findobj_status_topic: '/findobj/search_status'
+
+    # 游戏功能：robot_game_view / game_view_data
+    # 直接 UDP 到 cloud_daemon（协议同 push_cmd.sh）
+    #   start: URL:<gameUrl> + {"word","meaning"}；无 word 时发 SHOW
+    #   update: {"word","meaning"}
+    #   stop: EXIT
+    game_udp_host: '127.0.0.1'
+    game_udp_port: 24021
+    # 头部触摸上升沿停止游戏（/touch_status, pins 36/38/39）
+    touch_status_topic: '/touch_status'
+    # 游戏数据处理模式
+    # true: 收到平台信令后直接调用 UDP 发送，不进行 ASR 匹配验证
+    # false: 收到平台信令后加入队列，等待 ASR 确认后再发送（原有逻辑）
+    game_direct_send: true
+
+    # TTS 语音合成（audio_center）
+    tts_service: '/audio_center/play_tts'
+    tts_timeout_sec: 5.0
+
+    # 访问控制
+    dm_policy: 'open'           # DM 策略: open/allowlist/disabled
+    group_policy: 'open'        # 群聊策略: open/allowlist/disabled
+    require_mention: false      # 群聊是否需要 @提及
+    allow_from: []              # DM 白名单用户 ID 列表
+    group_allow_from: []        # 群聊白名单用户 ID 列表
+    mention_patterns: []        # @提及正则模式列表（如 ['@bot', '@小狸']）
+
+    # 消息去重
+    max_processed_ids: 1000     # 最大已处理消息 ID 缓存数量
+    max_fingerprints: 500       # 最大内容指纹缓存数量
+    fingerprint_ttl_sec: 300    # 内容指纹 TTL（秒，默认 5 分钟）
+
+    # 日志配置
+    console_log_level: 'INFO'
+    file_log_level: 'DEBUG'
+
+    # 语音助手启动模式
+    # -1: 不设置（保持默认）
+    #  0: 关闭语音助手（唤醒后不触发对话）
+    #  1: 启用语音助手（正常模式：ASR+NLP+TTS）
+    #  2: 启用语音助手（仅 ASR 模式）
+    assistant_startup_mode: 1

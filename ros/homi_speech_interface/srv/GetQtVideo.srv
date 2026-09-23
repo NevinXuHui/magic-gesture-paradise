@@ -1,0 +1,6 @@
+# 指定Qt端ip地址和端口
+string udphost
+int16 udpport
+---
+# 返回获取是否成功
+bool success
