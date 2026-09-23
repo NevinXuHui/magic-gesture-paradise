@@ -35,6 +35,7 @@ import queue
 import os
 import random
 import socket
+import uuid
 import psutil
 from typing import Optional, Dict, Any, Set, List
 from datetime import datetime
@@ -121,6 +122,11 @@ class HermesBridge(SpeechCoreClientNode):
         self.declare_parameter('game_udp_port', 24021)
         self.declare_parameter('touch_status_topic', '/touch_status')
         self.declare_parameter('game_direct_send', False)
+        default_runtime_socket = os.path.abspath(os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), '..', '..', '..',
+            'smartapp-runtime', 'runtime-data', 'smartapp-runtime', 'run', 'runtime.sock'
+        ))
+        self.declare_parameter('smartapp_runtime_socket', default_runtime_socket)
 
         # 异步请求 OpenClaw 服务鉴权信息（真正非阻塞）
         # 基类 send_async + request_service_credential_async(enable_retry=True)：
@@ -147,6 +153,7 @@ class HermesBridge(SpeechCoreClientNode):
         self.game_udp_port = int(self.get_parameter('game_udp_port').value)
         self.touch_status_topic = self.get_parameter('touch_status_topic').value
         self.game_direct_send = self.get_parameter('game_direct_send').value
+        self.smartapp_runtime_socket = self.get_parameter('smartapp_runtime_socket').value
 
         # 访问控制参数
         self.dm_policy = self.get_parameter('dm_policy').value
@@ -219,9 +226,10 @@ class HermesBridge(SpeechCoreClientNode):
         )
         self.logger.info("配送演示话题: /dog_mission/platform_event")
 
-        # 游戏会话跟踪：session_id -> {game_type, game_url, start_time, ...}
+        # 游戏会话跟踪：新版 SmartApp Runtime 会话或旧版 cloud show 会话
         self._active_game_sessions: Dict[str, Dict[str, Any]] = {}
         self._game_sessions_lock = threading.Lock()
+        self._runtime_command_lock = threading.Lock()
 
         # 游戏数据匹配队列：等待 ASR 确认后再下发 UDP
         # matchedText -> {data, timestamp, session_id, seq, event_id}
@@ -1398,6 +1406,79 @@ class HermesBridge(SpeechCoreClientNode):
     def _push_game_stop(self, tag: str) -> bool:
         return self._send_game_udp("EXIT", tag)
 
+    def _send_runtime_command(self, command: Dict[str, Any], timeout: float = 20.0) -> bool:
+        """Send one JSONL command to SmartApp Runtime and await its result."""
+        try:
+            with self._runtime_command_lock:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                    connection.settimeout(timeout)
+                    connection.connect(self.smartapp_runtime_socket)
+                    connection.sendall((json.dumps(command, ensure_ascii=False) + "\n").encode("utf-8"))
+                    with connection.makefile("rb") as stream:
+                        while True:
+                            line = stream.readline(1048577)
+                            if not line or len(line) > 1048576:
+                                raise ValueError("invalid Runtime response")
+                            result = json.loads(line)
+                            if (result.get("event") == "command_result"
+                                    and result.get("requestId") == command["requestId"]):
+                                if result.get("ok") is not True:
+                                    self.logger.error(
+                                        f"[smartapp_runtime] {command['command']} failed: {result.get('error')}"
+                                    )
+                                    return False
+                                return True
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            self.logger.error(f"[smartapp_runtime] {command['command']} failed: {exc}")
+            return False
+
+    def _process_smartapp_start(self, event_id: str, body: Dict[str, Any]) -> None:
+        session_id = body.get("sessionId")
+        app_id = body.get("appid")
+        digest = body.get("sha256") or body.get("md5")
+        digest_field = "sha256" if body.get("sha256") else "md5"
+        if (not all((session_id, app_id, body.get("version"), body.get("packageUrl"), digest))
+                or type(body.get("packageSize")) is not int
+                or type(body.get("data", {})) is not dict):
+            self.logger.error(f"[robot_game_view:start] invalid SmartApp package fields: {event_id}")
+            return
+        command = {
+            "requestId": uuid.uuid4().hex,
+            "command": "start_app",
+            "sessionId": session_id,
+            "appId": app_id,
+            "version": body["version"],
+            "packageUrl": body["packageUrl"],
+            "packageSize": body["packageSize"],
+            digest_field: digest,
+            "initData": body.get("data", {}),
+        }
+        if not self._send_runtime_command(command, timeout=180.0):
+            return
+        with self._game_sessions_lock:
+            self._active_game_sessions.clear()
+            self._active_game_sessions[session_id] = {
+                "runtime": True, "app_id": app_id, "start_time": time.time()
+            }
+        self.logger.info(f"[robot_game_view:start] SmartApp started: app_id={app_id} session_id={session_id}")
+
+    def _stop_smartapp(self, session_id: str, reason: str) -> bool:
+        if not session_id:
+            self.logger.warning("[robot_game_view:stop] sessionId is required")
+            return False
+        command = {
+            "requestId": uuid.uuid4().hex,
+            "command": "stop_app",
+            "sessionId": session_id,
+            "reason": reason,
+        }
+        if not self._send_runtime_command(command):
+            return False
+        with self._game_sessions_lock:
+            self._active_game_sessions.pop(session_id, None)
+        self.logger.info(f"[robot_game_view:stop] SmartApp stopped: session_id={session_id}")
+        return True
+
     def _on_touch_status(self, msg: String) -> None:
         """头部触摸上升沿：若游戏进行中则停止。"""
         raw = (msg.data or "").strip()
@@ -1421,14 +1502,14 @@ class HermesBridge(SpeechCoreClientNode):
         with self._game_sessions_lock:
             if not self._active_game_sessions:
                 return
-            session_ids = list(self._active_game_sessions.keys())
-        if not self._push_game_stop(f"robot_game_view:stop:{reason}"):
-            return
-        with self._game_sessions_lock:
-            self._active_game_sessions.clear()
-        self.logger.info(
-            f"[robot_game_view:stop] 触摸停止游戏 reason={reason} sessions={session_ids}"
-        )
+            sessions = list(self._active_game_sessions.items())
+        for session_id, session in sessions:
+            if session.get("runtime"):
+                stop_reason = "wake_word" if reason == "wake_word" else "operator"
+                self._stop_smartapp(session_id, stop_reason)
+            elif self._push_game_stop(f"robot_game_view:stop:{reason}"):
+                with self._game_sessions_lock:
+                    self._active_game_sessions.pop(session_id, None)
 
     def _process_robot_game_start(
         self, event_id: str, body: Dict[str, Any], raw: Dict[str, Any]
@@ -1454,6 +1535,9 @@ class HermesBridge(SpeechCoreClientNode):
           }
         """
         try:
+            if "packageUrl" in body or "appid" in body:
+                self._process_smartapp_start(event_id, body)
+                return
             game_url = body.get("gameUrl", "")
             session_id = body.get("sessionId", "")
             data_payload = body.get("data", {})
@@ -1593,6 +1677,15 @@ class HermesBridge(SpeechCoreClientNode):
                 f"  session_id: {session_id}"
             )
 
+            with self._game_sessions_lock:
+                session_info = self._active_game_sessions.get(session_id)
+                legacy_sessions = any(not item.get("runtime") for item in self._active_game_sessions.values())
+            if (session_info and session_info.get("runtime")) or not legacy_sessions:
+                self._stop_smartapp(session_id, "cloud_stop")
+                return
+            if session_info is None:
+                self.logger.warning(f"[robot_game_view:stop] unknown legacy session: {session_id}")
+                return
             if not self._push_game_stop("robot_game_view:stop"):
                 return
 
@@ -1676,9 +1769,32 @@ class HermesBridge(SpeechCoreClientNode):
         """
         try:
             session_id = body.get("sessionId", "")
-            msg_seq = body.get("seq", 0)
+            msg_seq = raw.get("seq", body.get("seq", 0))
             data_payload = body.get("data", {})
             matched_text = body.get("matchedText", "")
+
+            with self._game_sessions_lock:
+                session_info = self._active_game_sessions.get(session_id)
+                legacy_sessions = any(not item.get("runtime") for item in self._active_game_sessions.values())
+            if (session_info and session_info.get("runtime")) or not legacy_sessions:
+                if type(msg_seq) is not int or type(data_payload) is not dict:
+                    self.logger.warning(f"[game_view_data] invalid Runtime data: event_id={event_id}")
+                    return
+                command = {
+                    "requestId": uuid.uuid4().hex,
+                    "command": "cloud_data",
+                    "sessionId": session_id,
+                    "seq": msg_seq,
+                    "data": data_payload,
+                }
+                for source, destination in (("target", "target"), ("type", "dataType"), ("trigger", "trigger")):
+                    if source in body:
+                        command[destination] = body[source]
+                self._send_runtime_command(command)
+                return
+            if session_info is None:
+                self.logger.warning(f"[game_view_data] unknown legacy session: {session_id}")
+                return
 
             self.logger.info(
                 f"[game_view_data] 收到游戏数据\n"
@@ -2627,6 +2743,15 @@ class HermesBridge(SpeechCoreClientNode):
             f"[语音助手状态] status={msg.status} ({msg.description}) "
             f"section_id={msg.section_id} msg_data={msg_data}"
         )
+
+        if msg.status == 9:
+            threading.Thread(
+                target=self._stop_running_game,
+                args=("wake_word",),
+                name="game-wake-word-stop",
+                daemon=True,
+            ).start()
+            return
 
         # status=3: 游戏数据匹配验证
         if msg.status == 3:
