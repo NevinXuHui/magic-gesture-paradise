@@ -12,6 +12,7 @@ _APP_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _VERSION_PATTERN = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]{0,63}")
 _SESSION_ID_PATTERN = re.compile(r"[0-9A-Za-z][0-9A-Za-z._:-]{0,127}")
 _SHA256_PATTERN = re.compile(r"[0-9A-Fa-f]{64}")
+_MD5_PATTERN = re.compile(r"[0-9A-Fa-f]{32}")
 
 
 class StopReason(str, Enum):
@@ -136,20 +137,26 @@ class StartApp:
     package_size: int
     sha256: str
     init_data: Dict[str, Any]
+    md5: Optional[str] = None
 
     @classmethod
     def from_dict(cls, value: Dict[str, Any]) -> "StartApp":
         required = {
             "requestId", "command", "sessionId", "appId", "version", "packageUrl",
-            "packageSize", "sha256", "initData",
+            "packageSize", "initData",
         }
-        payload = _expect_command(value, "start_app", required, required)
+        payload = _expect_command(value, "start_app", required, required.union({"sha256", "md5"}))
         package_size = payload["packageSize"]
         if type(package_size) is not int or package_size <= 0:
             raise _validation_error("packageSize must be a positive integer")
-        sha256 = _expect_string(payload["sha256"], "sha256")
-        if _SHA256_PATTERN.fullmatch(sha256) is None:
+        if ("sha256" in payload) == ("md5" in payload):
+            raise _validation_error("exactly one package digest is required")
+        sha256 = payload.get("sha256", "")
+        md5 = payload.get("md5")
+        if "sha256" in payload and (type(sha256) is not str or _SHA256_PATTERN.fullmatch(sha256) is None):
             raise _validation_error("invalid sha256")
+        if md5 is not None and (type(md5) is not str or _MD5_PATTERN.fullmatch(md5) is None):
+            raise _validation_error("invalid md5")
         return cls(
             request_id=_expect_request_id(payload["requestId"]),
             session_id=_expect_session_id(payload["sessionId"]),
@@ -159,10 +166,11 @@ class StartApp:
             package_size=package_size,
             sha256=sha256.lower(),
             init_data=_expect_json_object(payload["initData"], "initData"),
+            md5=md5.lower() if md5 is not None else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "requestId": self.request_id,
             "command": "start_app",
             "sessionId": self.session_id,
@@ -170,9 +178,13 @@ class StartApp:
             "version": self.version,
             "packageUrl": self.package_url,
             "packageSize": self.package_size,
-            "sha256": self.sha256,
             "initData": copy.deepcopy(self.init_data),
         }
+        if self.md5 is not None:
+            result["md5"] = self.md5
+        else:
+            result["sha256"] = self.sha256
+        return result
 
 
 @dataclass(frozen=True)

@@ -89,7 +89,7 @@ class PackageInstaller:
                 await progress(RuntimeState.DOWNLOADING)
             request = DownloadRequest(command.package_url, command.package_size,
                                       command.sha256, self.config.limits.max_package_bytes,
-                                      self.config.timeouts.download)
+                                      self.config.timeouts.download, command.md5)
             observed = await self.downloader.download(request, transaction["part"])
             if progress is not None:
                 await progress(RuntimeState.VERIFYING)
@@ -160,10 +160,15 @@ class PackageInstaller:
                     or not _regular(metadata_path) or metadata_path.stat().st_size > 4096):
                 raise ValueError("invalid cache nodes")
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"), object_pairs_hook=_strict_object)
-            if (type(metadata) is not dict or set(metadata) != {"sha256", "packageSize", "installedAt"}
+            expected_keys = {"sha256", "packageSize", "installedAt"}
+            if command.md5 is not None:
+                expected_keys.add("md5")
+            if (type(metadata) is not dict or set(metadata) != expected_keys
                     or type(metadata["packageSize"]) is not int
                     or metadata["packageSize"] != command.package_size
-                    or metadata["sha256"] != command.sha256
+                    or (command.md5 is None and metadata["sha256"] != command.sha256)
+                    or (command.md5 is not None and metadata["md5"] != command.md5)
+                    or type(metadata["sha256"]) is not str
                     or type(metadata["installedAt"]) is not str):
                 raise ValueError("cache identity mismatch")
             stamp = datetime.fromisoformat(metadata["installedAt"])
@@ -171,7 +176,7 @@ class PackageInstaller:
                 raise ValueError("timestamp must be UTC")
             manifest = load_manifest(manifest_path, command.app_id, command.version)
             self._validate_entries(final, manifest)
-            return InstalledApp(final, manifest, command.sha256, command.package_size, True)
+            return InstalledApp(final, manifest, metadata["sha256"], command.package_size, True)
         except (OSError, ValueError, TypeError, SmartAppError, RuntimeError):
             raise _error(ErrorCode.INSTALL_CONFLICT, "existing application version cannot prove identical content") from None
 
@@ -185,6 +190,7 @@ class PackageInstaller:
             raise _error(ErrorCode.DOWNLOAD_FAILED, "download did not produce a regular package")
         size = 0
         digest = hashlib.sha256()
+        md5_digest = hashlib.md5()
         with part.open("rb") as source:
             while True:
                 checkpoint()
@@ -197,10 +203,21 @@ class PackageInstaller:
                 if size > command.package_size:
                     raise _error(ErrorCode.SIZE_MISMATCH, "download size differs from declaration")
                 digest.update(chunk)
+                md5_digest.update(chunk)
         if size != command.package_size or observed.size != size:
             raise _error(ErrorCode.SIZE_MISMATCH, "download size differs from declaration")
-        if digest.hexdigest() != command.sha256 or observed.sha256.lower() != command.sha256:
+        sha256 = digest.hexdigest()
+        if observed.sha256.lower() != sha256:
             raise _error(ErrorCode.HASH_MISMATCH, "download digest differs from declaration")
+        if command.md5 is not None:
+            matches = md5_digest.hexdigest() == command.md5
+            if observed.md5 is not None:
+                matches = matches and observed.md5.lower() == command.md5
+        else:
+            matches = sha256 == command.sha256
+        if not matches:
+            raise _error(ErrorCode.HASH_MISMATCH, "download digest differs from declaration")
+        transaction["sha256"] = sha256
         checkpoint()
 
     def _install(self, command, transaction, cancelled):
@@ -213,8 +230,10 @@ class PackageInstaller:
         app_root.resolve().relative_to(transaction["staging"].resolve())
         self._validate_entries(app_root, manifest)
         checkpoint()
-        metadata = {"sha256": command.sha256, "packageSize": command.package_size,
+        metadata = {"sha256": transaction["sha256"], "packageSize": command.package_size,
                     "installedAt": datetime.now(timezone.utc).isoformat()}
+        if command.md5 is not None:
+            metadata["md5"] = command.md5
         with (app_root / ".smartapp-install.json").open("x", encoding="utf-8") as output:
             json.dump(metadata, output, sort_keys=True)
             output.flush()
@@ -234,7 +253,7 @@ class PackageInstaller:
             os.fsync(fd)
         finally:
             os.close(fd)
-        return InstalledApp(final, manifest, command.sha256, command.package_size, False)
+        return InstalledApp(final, manifest, transaction["sha256"], command.package_size, False)
 
     def _cleanup(self, transaction):
         for key, directory, suffix in (("part", "downloads", ".part"), ("staging", "tmp", ".staging")):

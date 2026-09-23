@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Optional, Protocol
 
 
 @dataclass(frozen=True)
@@ -10,12 +10,14 @@ class DownloadRequest:
     expected_sha256: str
     max_bytes: int
     timeout: float
+    expected_md5: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class DownloadResult:
     size: int
     sha256: str
+    md5: Optional[str] = None
 
 
 class Downloader(Protocol):

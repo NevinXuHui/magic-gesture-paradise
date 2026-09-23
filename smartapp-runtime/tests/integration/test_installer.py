@@ -73,6 +73,17 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
             await downloader.download(self.request, self.destination)
         self.assertEqual(self.destination.read_bytes(), b"abc")
 
+    async def test_md5_declaration_is_checked_during_download(self):
+        request = replace(self.request, expected_sha256="", expected_md5=hashlib.md5(b"abc").hexdigest())
+        downloader = HttpsDownloader(opener=lambda request, timeout: Response())
+        result = await downloader.download(request, self.destination)
+        self.assertEqual(result.md5, request.expected_md5)
+        self.assertEqual(result.sha256, hashlib.sha256(b"abc").hexdigest())
+        bad = replace(request, expected_md5="0" * 32)
+        with self.assertRaises(SmartAppError) as raised:
+            await downloader.download(bad, self.destination.with_name("bad.part"))
+        self.assertEqual(raised.exception.code, ErrorCode.HASH_MISMATCH)
+
     async def test_http_initial_and_redirect_urls_are_rejected_without_credentials(self):
         for url, redirect in (("http://example.invalid/p", False),
                               ("http://user:secret@example.invalid/p?token=secret", False),
@@ -245,6 +256,19 @@ class InstallerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((first.root / "web/index.html").read_bytes(), b"hello")
         self.assertEqual(self.downloader.calls, 1)
         self.assert_clean()
+
+    async def test_md5_install_verifies_and_reuses_same_digest(self):
+        command = replace(self.command, sha256="", md5=hashlib.md5(self.data).hexdigest())
+        first = await self.installer.ensure_installed(command)
+        second = await self.installer.ensure_installed(command)
+        self.assertFalse(first.cache_hit)
+        self.assertTrue(second.cache_hit)
+        self.assertEqual(first.sha256, hashlib.sha256(self.data).hexdigest())
+        metadata = json.loads((first.root / ".smartapp-install.json").read_text())
+        self.assertEqual(metadata["md5"], command.md5)
+        with self.assertRaises(SmartAppError) as raised:
+            await self.installer.ensure_installed(replace(command, md5="0" * 32))
+        self.assertEqual(raised.exception.code, ErrorCode.INSTALL_CONFLICT)
 
     async def test_progress_callback_reports_only_cold_install_irreversible_phases(self):
         observed = []

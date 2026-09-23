@@ -86,10 +86,26 @@ class CommandParsingTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, ErrorCode.VALIDATION_ERROR)
 
-    def test_start_rejects_unknown_md5_field(self):
+    def test_start_accepts_md5_instead_of_sha256(self):
         payload = valid_start_payload()
-        payload["md5"] = "abc"
-        with self.assertRaisesRegex(SmartAppError, "unknown field"):
+        del payload["sha256"]
+        payload["md5"] = "A" * 32
+        start = StartApp.from_dict(payload)
+        self.assertEqual(start.md5, "a" * 32)
+        self.assertEqual(start.to_dict()["md5"], "a" * 32)
+        self.assertNotIn("sha256", start.to_dict())
+
+    def test_start_rejects_both_digests(self):
+        payload = valid_start_payload()
+        payload["md5"] = "a" * 32
+        with self.assertRaisesRegex(SmartAppError, "exactly one"):
+            StartApp.from_dict(payload)
+
+    def test_start_rejects_invalid_md5(self):
+        payload = valid_start_payload()
+        del payload["sha256"]
+        payload["md5"] = "a" * 31
+        with self.assertRaisesRegex(SmartAppError, "invalid md5"):
             StartApp.from_dict(payload)
 
     def test_start_copies_init_data_at_input_and_output_boundaries(self):

@@ -796,7 +796,7 @@ class RuntimeCoordinator:
 
 
 def _identity(command: StartApp) -> Tuple[str, str, str, str]:
-    return command.session_id, command.app_id, command.version, command.sha256
+    return command.session_id, command.app_id, command.version, command.md5 or command.sha256
 
 
 def _normalize_command(command: Any) -> Any:

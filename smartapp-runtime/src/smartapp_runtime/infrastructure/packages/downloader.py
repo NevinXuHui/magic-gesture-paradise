@@ -145,6 +145,7 @@ class HttpsDownloader:
                     remaining()
                     size = 0
                     digest = hashlib.sha256()
+                    md5_digest = hashlib.md5()
                     with destination.open("xb") as output:
                         while True:
                             remaining()
@@ -160,13 +161,21 @@ class HttpsDownloader:
                                 raise SmartAppError(ErrorCode.SIZE_MISMATCH, "download size does not match declaration")
                             output.write(chunk)
                             digest.update(chunk)
+                            md5_digest.update(chunk)
                         output.flush()
                     if size != request.expected_size:
                         raise SmartAppError(ErrorCode.SIZE_MISMATCH, "download size does not match declaration")
                     observed = digest.hexdigest()
-                    if observed != request.expected_sha256.lower():
+                    if request.expected_md5 is not None:
+                        matches = md5_digest.hexdigest() == request.expected_md5.lower()
+                    else:
+                        matches = observed == request.expected_sha256.lower()
+                    if not matches:
                         raise SmartAppError(ErrorCode.HASH_MISMATCH, "download digest does not match declaration")
-                    return DownloadResult(size, observed)
+                    return DownloadResult(
+                        size, observed,
+                        md5_digest.hexdigest() if request.expected_md5 is not None else None,
+                    )
             raise _failed()
         except SmartAppError:
             raise
