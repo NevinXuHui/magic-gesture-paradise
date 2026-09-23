@@ -106,6 +106,19 @@ sha256=<64 位 SHA-256>
 - 摄像头共享流位于 `/tmp/neck_jpeg`、`/tmp/foo_fhd` 或 `/tmp/neck_hd`。
 - `18080` 和 `18081` 回环端口未被其他进程占用。
 
+## 已有 Electron 云端展示框架的狗端试运行
+
+狗端已有 `/root/electron/push_cmd.sh` 时，可直接用它加载本机 URL，无需覆盖现有 Electron 进程。先把归档解压到 `rps-kids-h5/build/run/`，从仓库目录启动：
+
+```bash
+cd /home/unitree/magic-gesture-paradise/rps-kids-h5
+mkdir -p build/run
+tar -xzf build/smartapp/rock_paper_scissors-0.1.8.tar.gz -C build/run
+python3 scripts/run-dog-standalone.py
+```
+
+狗屏加载 `/root/electron/push_cmd.sh http://127.0.0.1:18080/`，PC 在同一网络打开 `http://<狗IP>:18080/?debug=1`。服务将 `/api/` 同源转发给本机 Python 推理端口 18081，浏览器不加载 MediaPipe 模型。结束展示可执行 `/root/electron/push_cmd.sh EXIT`；停止服务则结束 `run-dog-standalone.py` 进程。该模式复用狗现有的 Electron 显示通道，不取代正式 SmartApp Runtime 的会话与 Agent 协议。
+
 ## 本地开发与正式部署边界
 
 `start-local.sh` 和 `start-https.sh` 只用于浏览器本地开发，使用访问设备自己的摄像头。正式设备部署只分发 SmartApp tar.gz，不运行这两个脚本。
