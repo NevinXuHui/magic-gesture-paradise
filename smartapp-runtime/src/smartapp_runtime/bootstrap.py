@@ -260,17 +260,22 @@ async def run_runtime(config: RuntimeConfig) -> None:
     except BaseException as error:
         primary = error
     finally:
-        remove_handlers()
         cleanup_task = asyncio.create_task(assembly.stop(), name="runtime-shutdown")
         interrupted: Optional[asyncio.CancelledError] = None
-        while not cleanup_task.done():
-            try:
-                await asyncio.shield(cleanup_task)
-            except asyncio.CancelledError as error:
-                if interrupted is None:
-                    interrupted = error
-            except BaseException:
-                break
+        try:
+            while not cleanup_task.done():
+                try:
+                    await asyncio.shield(cleanup_task)
+                except asyncio.CancelledError as error:
+                    if interrupted is None:
+                        interrupted = error
+                except BaseException:
+                    break
+        finally:
+            # Keep SIGINT/SIGTERM mapped to the idempotent stop event until all
+            # application and display cleanup has completed. Repeated Ctrl+C
+            # must not interrupt asyncio.run() while it restores the display.
+            remove_handlers()
         cleanup_error: Optional[BaseException]
         if cleanup_task.cancelled():
             cleanup_error = asyncio.CancelledError()

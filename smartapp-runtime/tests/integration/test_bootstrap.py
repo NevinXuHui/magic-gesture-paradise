@@ -299,6 +299,47 @@ class SignalAndCliTests(unittest.IsolatedAsyncioTestCase):
                 await task
         self.assertTrue(assembly.stopped)
 
+    async def test_signal_handlers_remain_installed_through_shutdown(self):
+        events = []
+        captured = {}
+
+        class Assembly:
+            async def start(self):
+                events.append("start")
+
+            async def stop(self):
+                events.append("stop")
+                captured["signal"]()
+                await asyncio.sleep(0)
+                events.append("restored")
+
+        def install(_loop, stopped):
+            captured["stopped"] = stopped
+            captured["signal"] = stopped.set
+            events.append("handlers-installed")
+            stopped.set()
+
+            def remove():
+                self.assertIn("restored", events)
+                events.append("handlers-removed")
+
+            return remove
+
+        with patch("smartapp_runtime.bootstrap.build_runtime", return_value=Assembly()), \
+                patch("smartapp_runtime.bootstrap._install_signal_handlers", side_effect=install):
+            await run_runtime(RuntimeConfig())
+
+        self.assertEqual(events, [
+            "start", "handlers-installed", "stop", "restored", "handlers-removed",
+        ])
+
+    async def test_cli_suppresses_late_keyboard_interrupt(self):
+        config = RuntimeConfig()
+        with patch("smartapp_runtime.__main__.load_config", return_value=config), \
+                patch("smartapp_runtime.__main__.run_runtime", new=lambda _config: None), \
+                patch("smartapp_runtime.__main__.asyncio.run", side_effect=KeyboardInterrupt):
+            self.assertEqual(main(["--config", "runtime.toml"]), 130)
+
     async def test_run_runtime_cancellation_is_not_masked_by_shutdown_failure(self):
         class Assembly:
             def __init__(self):

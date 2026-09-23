@@ -26,6 +26,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
         asyncio.run(run_runtime(config))
         return 0
+    except KeyboardInterrupt:
+        return 130
     except Exception as error:
         message = sanitize_message(str(error)) or "runtime failed"
         print("smartapp-runtime: " + message, file=sys.stderr)
