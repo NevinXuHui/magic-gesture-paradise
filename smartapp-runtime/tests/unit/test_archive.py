@@ -39,11 +39,11 @@ def archive_bytes(extra=(), manifest=None, mode="w:gz"):
 
 
 class ArchiveTests(unittest.TestCase):
-    def extract(self, payload, limits=None):
+    def extract(self, payload, limits=None, app_id="demo"):
         archive = self.root / "input.tar.gz"
         archive.write_bytes(payload)
         return SafeArchiveExtractor(limits or LimitConfig()).extract(
-            archive, self.staging, "demo", "1")
+            archive, self.staging, app_id, "1")
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -68,12 +68,15 @@ class ArchiveTests(unittest.TestCase):
 
     def test_traversal_absolute_dot_empty_and_wrong_root_never_escape(self):
         for name in ("../escape", str(self.root / "escape"), "demo/../escape",
-                     "demo/./escape", "demo//escape", "other/file", "demo/\x00evil"):
+                     "demo/./escape", "demo//escape", "demo/\x00evil"):
             with self.subTest(name=name):
                 # Separate staging roots also prove no pre-existing files are reused.
                 self.staging = self.root / ("stage" + str(len(list(self.root.iterdir()))))
                 self.staging.mkdir()
                 self.assert_unsafe(archive_bytes([(name, b"x", tarfile.REGTYPE, 0o644)]))
+
+    def test_mixed_package_roots_are_rejected(self):
+        self.assert_unsafe(archive_bytes([("other/file", b"x", tarfile.REGTYPE, 0o644)]))
 
     def test_links_devices_fifo_and_setid_are_rejected(self):
         for kind, mode in ((tarfile.SYMTYPE, 0o644), (tarfile.LNKTYPE, 0o644),
@@ -139,6 +142,10 @@ class ArchiveTests(unittest.TestCase):
             ("demo/assets/中文.txt", b"text", tarfile.REGTYPE, 0o777)]))
         self.assertEqual((root / "assets/中文.txt").read_bytes(), b"text")
         self.assertEqual((root / "assets").stat().st_mode & 0o7777, 0o755)
+
+    def test_package_root_can_differ_from_deployment_app_id(self):
+        root, manifest = self.extract(archive_bytes(), app_id="llm_app_2d424502d2f34173bfa77c704a823bcf")
+        self.assertEqual(root.name, manifest.app_id)
 
     def test_pax_sparse_10_is_rejected_before_reading_attacker_map(self):
         stream = io.BytesIO()

@@ -6,7 +6,7 @@ import os
 import shutil
 import threading
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
@@ -163,6 +163,8 @@ class PackageInstaller:
             expected_keys = {"sha256", "packageSize", "installedAt"}
             if command.md5 is not None:
                 expected_keys.add("md5")
+            if "packageAppId" in metadata:
+                expected_keys.add("packageAppId")
             if (type(metadata) is not dict or set(metadata) != expected_keys
                     or type(metadata["packageSize"]) is not int
                     or metadata["packageSize"] != command.package_size
@@ -174,7 +176,9 @@ class PackageInstaller:
             stamp = datetime.fromisoformat(metadata["installedAt"])
             if stamp.tzinfo is None or stamp.utcoffset().total_seconds() != 0:
                 raise ValueError("timestamp must be UTC")
-            manifest = load_manifest(manifest_path, command.app_id, command.version)
+            package_app_id = metadata.get("packageAppId", command.app_id)
+            manifest = load_manifest(manifest_path, package_app_id, command.version)
+            manifest = replace(manifest, app_id=command.app_id)
             self._validate_entries(final, manifest)
             return InstalledApp(final, manifest, metadata["sha256"], command.package_size, True)
         except (OSError, ValueError, TypeError, SmartAppError, RuntimeError):
@@ -227,6 +231,8 @@ class PackageInstaller:
 
         part = transaction["part"]
         app_root, manifest = self.extractor.extract(part, transaction["staging"], command.app_id, command.version)
+        package_app_id = manifest.app_id
+        manifest = replace(manifest, app_id=command.app_id)
         app_root.resolve().relative_to(transaction["staging"].resolve())
         self._validate_entries(app_root, manifest)
         checkpoint()
@@ -234,6 +240,8 @@ class PackageInstaller:
                     "installedAt": datetime.now(timezone.utc).isoformat()}
         if command.md5 is not None:
             metadata["md5"] = command.md5
+        if package_app_id != command.app_id:
+            metadata["packageAppId"] = package_app_id
         with (app_root / ".smartapp-install.json").open("x", encoding="utf-8") as output:
             json.dump(metadata, output, sort_keys=True)
             output.flush()

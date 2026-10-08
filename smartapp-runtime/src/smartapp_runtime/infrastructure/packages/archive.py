@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 from typing import Tuple
 
 from smartapp_runtime.config import LimitConfig
+from smartapp_runtime.domain.commands import _expect_app_id
 from smartapp_runtime.domain.errors import ErrorCode, SmartAppError
 from smartapp_runtime.domain.manifest import Manifest, load_manifest
 
@@ -18,12 +19,14 @@ class SafeArchiveExtractor:
         self.limits = limits
 
     def extract(self, archive_path: Path, staging_root: Path,
-                expected_app_id: str, expected_version: str) -> Tuple[Path, Manifest]:
+                deployment_app_id: str, expected_version: str) -> Tuple[Path, Manifest]:
         try:
+            _expect_app_id(deployment_app_id)
             if staging_root.is_symlink() or not staging_root.is_dir() or any(staging_root.iterdir()):
                 raise _unsafe()
             base = staging_root.resolve()
             seen = set()
+            package_app_id = None
             declared_total = actual_total = 0
             limits = self.limits
 
@@ -107,9 +110,11 @@ class SafeArchiveExtractor:
                     name = member.name
                     parts = name.split("/")
                     relative = PurePosixPath(name)
+                    if package_app_id is None:
+                        package_app_id = parts[0]
                     if (not name or "\x00" in name or relative.is_absolute()
                             or any(part in ("", ".", "..") for part in parts)
-                            or parts[0] != expected_app_id
+                            or parts[0] != package_app_id
                             or len(name.encode("utf-8")) > self.limits.max_path_length
                             or count > self.limits.max_files
                             or not (member.isdir() or member.type in (tarfile.REGTYPE, tarfile.AREGTYPE))
@@ -138,7 +143,7 @@ class SafeArchiveExtractor:
                         if not target.is_dir() or member.size:
                             raise _unsafe()
                         continue
-                    if target == base / expected_app_id:
+                    if target == base / package_app_id:
                         raise _unsafe()
                     source = archive.extractfile(member)
                     if source is None:
@@ -167,8 +172,10 @@ class SafeArchiveExtractor:
                 padding = archive.fileobj.read(tarfile.RECORDSIZE + 1)
                 if len(padding) > tarfile.RECORDSIZE or any(padding):
                     raise _unsafe()
-            app_root = base / expected_app_id
-            manifest = load_manifest(app_root / "manifest.json", expected_app_id, expected_version)
+            if package_app_id is None:
+                raise _unsafe()
+            app_root = base / package_app_id
+            manifest = load_manifest(app_root / "manifest.json", package_app_id, expected_version)
             return app_root, manifest
         except SmartAppError:
             raise

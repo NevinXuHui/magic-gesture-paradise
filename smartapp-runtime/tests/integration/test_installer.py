@@ -97,6 +97,19 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(raised.exception.code, ErrorCode.DOWNLOAD_FAILED)
                 self.assertNotIn("secret", str(raised.exception))
 
+    async def test_presigned_https_url_keeps_query_parameters(self):
+        signed_url = "https://example.invalid/0.1.11.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc"
+        observed = []
+
+        def opener(request, timeout):
+            observed.append(request.full_url)
+            return Response()
+
+        result = await HttpsDownloader(opener=opener).download(
+            replace(self.request, url=signed_url), self.destination)
+        self.assertEqual(observed, [signed_url])
+        self.assertEqual(result.size, 3)
+
     async def test_redirect_limit_stops_fourth_redirect(self):
         calls = []
         def opener(request, timeout):
@@ -268,6 +281,26 @@ class InstallerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metadata["md5"], command.md5)
         with self.assertRaises(SmartAppError) as raised:
             await self.installer.ensure_installed(replace(command, md5="0" * 32))
+        self.assertEqual(raised.exception.code, ErrorCode.INSTALL_CONFLICT)
+
+    async def test_cloud_app_id_uses_package_manifest_and_reuses_cache(self):
+        command = replace(self.command, app_id="llm_app_2d424502d2f34173bfa77c704a823bcf",
+                          sha256="", md5=hashlib.md5(self.data).hexdigest())
+        first = await self.installer.ensure_installed(command)
+        second = await self.installer.ensure_installed(command)
+        self.assertEqual(first.root, self.root / "apps" / command.app_id / "1")
+        self.assertEqual(first.manifest.app_id, command.app_id)
+        self.assertEqual(second.manifest.app_id, command.app_id)
+        self.assertTrue(second.cache_hit)
+        self.assertEqual(json.loads((first.root / "manifest.json").read_text())["appId"], "demo")
+        self.assertEqual(json.loads((first.root / ".smartapp-install.json").read_text())["packageAppId"], "demo")
+        self.assertEqual(self.downloader.calls, 1)
+        manifest_path = first.root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["appId"] = "other"
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaises(SmartAppError) as raised:
+            await self.installer.ensure_installed(command)
         self.assertEqual(raised.exception.code, ErrorCode.INSTALL_CONFLICT)
 
     async def test_progress_callback_reports_only_cold_install_irreversible_phases(self):
