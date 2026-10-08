@@ -99,10 +99,10 @@ RPS 启动成功后，可保持 Agent 连接并订阅每局游戏结果：
 每局只推送一次 `game_result`。按 `Ctrl+C` 退出订阅：
 
 ```json
-{"event":"app_data","sessionId":"rps-deploy-validation","appId":"rock_paper_scissors","dataType":"game_result","data":{"user":"fist","computer":"peace","outcome":"win","rounds":1}}
+{"event":"app_data","sessionId":"rps-deploy-validation","appId":"rock_paper_scissors","dataType":"game_result","data":{"user":"rock","robot":"scissors","result":"win"}}
 ```
 
-`user` 和 `computer` 使用 `fist`（石头）、`peace`（剪刀）、`palm`（布）；`outcome` 使用 `win`、`lose`、`draw`，均以玩家视角表示；`rounds` 是当前进程内完成的回合数。
+`user` 和 `robot` 使用 `rock`（石头）、`scissors`（剪刀）、`paper`（布）；`result` 使用 `win`、`lose`、`draw`，以玩家视角表示。
 
 也可以操作 English SmartApp（项目目录为 `english`，应用 `appId` 仍为 `cloud_show_display`）：
 

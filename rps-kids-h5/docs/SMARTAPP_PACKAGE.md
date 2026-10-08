@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -52,7 +52,7 @@ stdout 只输出协议消息；运行日志写入 stderr。收到 `app_stop`、S
 游戏结果由 H5 通过 Renderer Bridge 上报，不经过摄像头 backend：
 
 ```json
-{"event":"app_data","dataType":"game_result","data":{"user":"fist","computer":"peace","outcome":"win","rounds":1}}
+{"event":"app_data","dataType":"game_result","data":{"user":"rock","robot":"scissors","result":"win"}}
 ```
 
 Renderer 将事件转发给 Runtime，Runtime 再补充权威的 `sessionId` 和 `appId` 并推送给 Agent。
@@ -78,7 +78,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.11.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.12.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -93,7 +93,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,
@@ -120,7 +120,7 @@ sha256=<64 位 SHA-256>
 ```bash
 cd /home/unitree/magic-gesture-paradise/rps-kids-h5
 mkdir -p build/run
-tar -xzf build/smartapp/rock_paper_scissors-0.1.11.tar.gz -C build/run
+tar -xzf build/smartapp/rock_paper_scissors-0.1.12.tar.gz -C build/run
 python3 scripts/run-dog-standalone.py --camera-source forehead
 ```
 
@@ -134,4 +134,4 @@ python3 scripts/run-dog-standalone.py --camera-source forehead
 
 模型由 backend/inference.py 使用原生 MediaPipe CPU 加载，不再在 Electron Worker 中加载 WASM。`/api/status` 仅在真实帧完成推理后 ready；`/api/recognition?preview=0` 返回最新序号、帧年龄、宽高、关键点与分类。前端去重并拒绝过期帧。调试时 `preview=1` 附带同一帧 JPEG 的 Base64。`/api/frame` 保留兼容用途。
 
-包内模型位于 backend/models/gesture_recognizer.task。0.1.8 包内的 `backend/vendor/` 自带 CPython 3.8 / Linux ARM64 的 MediaPipe 0.10.9 和精简依赖；系统 OpenCV 必须保留 GStreamer 支持，详见项目 README。构建时可设置 `SMARTAPP_WHEELHOUSE=/path/to/wheels` 完全离线使用预下载的轮子。PC 另外提供 server.py 与 POST /api/infer。SmartApp 的 runtime_init、app_ready、app_stop 和 H5 game_result 上报格式保持不变。构建脚本支持 macOS/Linux；目标狗端的导入、模型推理和真实摄像头仍需实机验收。
+包内模型位于 backend/models/gesture_recognizer.task。0.1.8 包内的 `backend/vendor/` 自带 CPython 3.8 / Linux ARM64 的 MediaPipe 0.10.9 和精简依赖；系统 OpenCV 必须保留 GStreamer 支持，详见项目 README。构建时可设置 `SMARTAPP_WHEELHOUSE=/path/to/wheels` 完全离线使用预下载的轮子。PC 另外提供 server.py 与 POST /api/infer。SmartApp 的 runtime_init、app_ready、app_stop 格式保持不变；H5 game_result 使用上文的 `user`、`robot`、`result` 格式。构建脚本支持 macOS/Linux；目标狗端的导入、模型推理和真实摄像头仍需实机验收。

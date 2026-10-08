@@ -4,6 +4,7 @@ import GameSprite from './components/GameSprite.vue'
 import {StillRps,rpsScores} from './lib/rps.js'
 import {MotionTarget} from './lib/target.js'
 import {GameRound,FistShake,ShakeStopGate,LABELS} from './lib/game.js'
+import {gameResultData} from './lib/report.js'
 
 const base=import.meta.env.BASE_URL
 const query=new URLSearchParams(location.search)
@@ -34,12 +35,13 @@ const phaseNames={moving:'手在移动',settling:'等待停稳',recognized:'已�
 function resetInteraction(){target.reset();still.reset();shake.reset();shakeStop.reset();engine.reset();round.value=engine.snapshot();motionHint.value='waiting'}
 function logEvent(type,detail=''){if(recording.value)recordingData.lines.push(`E|${Math.round(performance.now()-recordingData.startedPerf)}|${type}|${detail}`)}
 function publishGameResult(result){
-  if(!window.smartApp?.postMessage||!result?.user||!result?.computer||!result?.outcome)return
+  const data=gameResultData(result)
+  if(!window.smartApp?.postMessage||!data)return
   try{
     window.smartApp.postMessage({
       event:'app_data',
       dataType:'game_result',
-      data:{user:result.user,computer:result.computer,outcome:result.outcome,rounds:result.rounds}
+      data
     })
   }catch(error){
     console.warn('Unable to publish game result:',error)
