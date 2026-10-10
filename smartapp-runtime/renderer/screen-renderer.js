@@ -30,6 +30,7 @@ let readySent = false
 let rendererReadyEmitted = false
 let claiming = false
 let stopping = false
+let mpvRequestId = 0
 const pendingAppData = []
 
 function log(message) {
@@ -41,6 +42,7 @@ function emit(message) {
 }
 
 function mpvRequest(command, timeoutMs = 3000) {
+  const requestId = ++mpvRequestId
   return new Promise((resolve, reject) => {
     let settled = false
     let buffer = ''
@@ -55,17 +57,21 @@ function mpvRequest(command, timeoutMs = 3000) {
     }
     const timer = setTimeout(() => finish(Error('MPV IPC timed out')), timeoutMs)
     socket.setEncoding('utf8')
-    socket.on('connect', () => socket.write(`${JSON.stringify({ command })}\n`))
+    socket.on('connect', () => socket.write(`${JSON.stringify({ command, request_id: requestId })}\n`))
     socket.on('data', chunk => {
       buffer += chunk
-      const newline = buffer.indexOf('\n')
-      if (newline < 0) return
-      try {
-        const response = JSON.parse(buffer.slice(0, newline))
-        if (response.error && response.error !== 'success') finish(Error(`MPV: ${response.error}`))
-        else finish(null, response)
-      } catch (error) {
-        finish(error)
+      let newline
+      while (!settled && (newline = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, newline)
+        buffer = buffer.slice(newline + 1)
+        try {
+          const response = JSON.parse(line)
+          if (response.request_id !== requestId) continue
+          if (response.error && response.error !== 'success') finish(Error(`MPV: ${response.error}`))
+          else finish(null, response)
+        } catch (error) {
+          finish(error)
+        }
       }
     })
     socket.on('error', error => finish(error))
