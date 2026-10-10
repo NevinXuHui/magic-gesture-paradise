@@ -161,7 +161,7 @@ class PackageInstaller:
                 raise ValueError("invalid cache nodes")
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"), object_pairs_hook=_strict_object)
             expected_keys = {"sha256", "packageSize", "installedAt"}
-            if command.md5 is not None:
+            if "md5" in metadata:
                 expected_keys.add("md5")
             if "packageAppId" in metadata:
                 expected_keys.add("packageAppId")
@@ -169,7 +169,10 @@ class PackageInstaller:
                     or type(metadata["packageSize"]) is not int
                     or metadata["packageSize"] != command.package_size
                     or (command.md5 is None and metadata["sha256"] != command.sha256)
-                    or (command.md5 is not None and metadata["md5"] != command.md5)
+                    or (command.md5 is not None and "md5" in metadata and metadata["md5"] != command.md5)
+                    or ("md5" in metadata and (type(metadata["md5"]) is not str
+                                              or len(metadata["md5"]) != 32
+                                              or any(c not in "0123456789abcdef" for c in metadata["md5"])))
                     or type(metadata["sha256"]) is not str
                     or type(metadata["installedAt"]) is not str):
                 raise ValueError("cache identity mismatch")
@@ -180,6 +183,8 @@ class PackageInstaller:
             manifest = load_manifest(manifest_path, package_app_id, command.version)
             manifest = replace(manifest, app_id=command.app_id)
             self._validate_entries(final, manifest)
+            if command.md5 is not None and "md5" not in metadata:
+                return None
             return InstalledApp(final, manifest, metadata["sha256"], command.package_size, True)
         except (OSError, ValueError, TypeError, SmartAppError, RuntimeError):
             raise _error(ErrorCode.INSTALL_CONFLICT, "existing application version cannot prove identical content") from None
@@ -222,6 +227,7 @@ class PackageInstaller:
         if not matches:
             raise _error(ErrorCode.HASH_MISMATCH, "download digest differs from declaration")
         transaction["sha256"] = sha256
+        transaction["md5"] = md5_digest.hexdigest()
         checkpoint()
 
     def _install(self, command, transaction, cancelled):
@@ -236,10 +242,8 @@ class PackageInstaller:
         app_root.resolve().relative_to(transaction["staging"].resolve())
         self._validate_entries(app_root, manifest)
         checkpoint()
-        metadata = {"sha256": transaction["sha256"], "packageSize": command.package_size,
+        metadata = {"sha256": transaction["sha256"], "md5": transaction["md5"], "packageSize": command.package_size,
                     "installedAt": datetime.now(timezone.utc).isoformat()}
-        if command.md5 is not None:
-            metadata["md5"] = command.md5
         if package_app_id != command.app_id:
             metadata["packageAppId"] = package_app_id
         with (app_root / ".smartapp-install.json").open("x", encoding="utf-8") as output:
@@ -256,6 +260,21 @@ class PackageInstaller:
             checkpoint()
             cached = self._cache(final, command)
             if cached is not None:
+                return cached
+            if _exists(final):
+                # Legacy records need a verified download to bridge digest algorithms.
+                cached = self._cache(final, replace(command, md5=None, sha256=transaction["sha256"]))
+                metadata_path = final / ".smartapp-install.json"
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"), object_pairs_hook=_strict_object)
+                metadata["md5"] = transaction["md5"]
+                migration_path = app_root / ".smartapp-install.json"
+                with migration_path.open("w", encoding="utf-8") as output:
+                    json.dump(metadata, output, sort_keys=True)
+                    output.flush()
+                    os.fsync(output.fileno())
+                checkpoint()
+                os.replace(str(migration_path), str(metadata_path))
+                _fsync_directory(final)
                 return cached
             os.replace(str(app_root), str(final))
             os.fsync(fd)

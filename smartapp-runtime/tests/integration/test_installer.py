@@ -256,7 +256,7 @@ class InstallerTests(unittest.IsolatedAsyncioTestCase):
         original = os.replace
         def checked_replace(source, destination):
             metadata = json.loads((Path(source) / ".smartapp-install.json").read_text())
-            self.assertEqual(set(metadata), {"sha256", "packageSize", "installedAt"})
+            self.assertEqual(set(metadata), {"sha256", "md5", "packageSize", "installedAt"})
             self.assertEqual(metadata["sha256"], self.command.sha256)
             self.assertFalse(Path(destination).exists())
             return original(source, destination)
@@ -279,9 +279,45 @@ class InstallerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.sha256, hashlib.sha256(self.data).hexdigest())
         metadata = json.loads((first.root / ".smartapp-install.json").read_text())
         self.assertEqual(metadata["md5"], command.md5)
+        self.assertTrue((await self.installer.ensure_installed(self.command)).cache_hit)
         with self.assertRaises(SmartAppError) as raised:
             await self.installer.ensure_installed(replace(command, md5="0" * 32))
         self.assertEqual(raised.exception.code, ErrorCode.INSTALL_CONFLICT)
+
+    async def test_cache_reuses_both_digest_algorithms(self):
+        md5_command = replace(self.command, sha256="", md5=hashlib.md5(self.data).hexdigest())
+        for command in (self.command, md5_command, self.command):
+            await self.installer.ensure_installed(command)
+        self.assertEqual(self.downloader.calls, 1)
+
+    async def test_legacy_cache_verifies_download_before_backfilling_md5(self):
+        first = await self.installer.ensure_installed(self.command)
+        path = first.root / ".smartapp-install.json"
+        metadata = json.loads(path.read_text())
+        metadata.pop("md5", None)
+        path.write_text(json.dumps(metadata))
+        command = replace(self.command, sha256="", md5=hashlib.md5(self.data).hexdigest())
+        second = await self.installer.ensure_installed(command)
+        self.assertTrue(second.cache_hit)
+        self.assertEqual(json.loads(path.read_text())["md5"], command.md5)
+        await self.installer.ensure_installed(command)
+        self.assertEqual(self.downloader.calls, 2)
+        self.assert_clean()
+
+    async def test_legacy_cache_rejects_download_with_different_sha256(self):
+        first = await self.installer.ensure_installed(self.command)
+        path = first.root / ".smartapp-install.json"
+        metadata = json.loads(path.read_text())
+        metadata.pop("md5", None)
+        metadata["sha256"] = "0" * 64
+        path.write_text(json.dumps(metadata))
+        original = path.read_bytes()
+        command = replace(self.command, sha256="", md5=hashlib.md5(self.data).hexdigest())
+        with self.assertRaises(SmartAppError) as raised:
+            await self.installer.ensure_installed(command)
+        self.assertEqual(raised.exception.code, ErrorCode.INSTALL_CONFLICT)
+        self.assertEqual(path.read_bytes(), original)
+        self.assert_clean()
 
     async def test_cloud_app_id_uses_package_manifest_and_reuses_cache(self):
         command = replace(self.command, app_id="llm_app_2d424502d2f34173bfa77c704a823bcf",
