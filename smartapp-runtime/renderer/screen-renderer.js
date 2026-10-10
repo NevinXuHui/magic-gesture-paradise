@@ -15,6 +15,7 @@ const MPV_SOCKET = process.env.MPV_SOCKET || '/tmp/mpv-socket'
 const EXPRESSION_READY_FILE = process.env.EXPRESSION_READY_FILE || ''
 const URL = process.env.SCREEN_URL || process.argv[2]
 const FFMPEG = process.env.FFMPEG_BIN || 'ffmpeg'
+const startupTime = Date.now()
 
 let windowRef
 let encoder
@@ -173,6 +174,7 @@ async function claimDisplay() {
   claiming = true
   try {
     await waitForExpressionReady()
+    log(`Startup expression-ready: ${Date.now() - startupTime} ms`)
     await mpvRequest(['set_property', 'hwdec', 'no'])
     await mpvRequest(['set_property', 'hwdec-codecs', 'no'])
     await mpvRequest(['set_property', 'loop-file', false])
@@ -184,6 +186,7 @@ async function claimDisplay() {
     await mpvRequest(['loadfile', OUTPUT_FIFO, 'replace'], 8000)
     await mpvRequest(['set_property', 'pause', false])
     await waitForMpvPath(OUTPUT_FIFO)
+    log(`Startup display-claimed: ${Date.now() - startupTime} ms`)
     readySent = true
     if (!rendererReadyEmitted) {
       rendererReadyEmitted = true
@@ -285,6 +288,7 @@ function createWindow() {
     if (!firstPaint) {
       firstPaint = true
       log(`First paint: ${size.width}x${size.height}`)
+      log(`Startup first-paint: ${Date.now() - startupTime} ms`)
       void claimDisplay()
     }
   })
