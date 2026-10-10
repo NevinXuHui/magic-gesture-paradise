@@ -21,7 +21,7 @@
 {
   "schemaVersion": 1,
   "appId": "rock_paper_scissors",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "web": {"enabled": true, "entry": "index.html"},
   "backend": {"enabled": true, "entry": "main.py", "dynamicService": true},
   "routing": {"defaultTarget": "python"}
@@ -78,7 +78,7 @@ npm run build:smartapp
 输出示例：
 
 ```text
-SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.12.tar.gz
+SmartApp 包：.../build/smartapp/rock_paper_scissors-0.1.13.tar.gz
 packageSize=<归档字节数>
 sha256=<64 位 SHA-256>
 ```
@@ -93,7 +93,7 @@ sha256=<64 位 SHA-256>
 {
   "game": "start",
   "appid": "rock_paper_scissors",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "sessionId": "<session-id>",
   "packageUrl": "<HTTPS tar.gz URL>",
   "packageSize": 0,
@@ -110,7 +110,7 @@ sha256=<64 位 SHA-256>
 - `/usr/bin/python3` 是 CPython 3.8.10，已安装 OpenCV Python 绑定；其他推理依赖已在归档的 `backend/vendor/`。
 - OpenCV 构建包含 GStreamer 支持。
 - 领结 JPEG 共享流位于 `/tmp/neck_jpeg`；额头 JPEG 共享流位于 `/tmp/foo_jpeg`。
-- 额头模式启动前需调用 `/video_gst/get_video_service`，以 `{resolution: jpeg}` 开启额头 JPEG 流。
+- 额头模式由 backend 自动调用 `/video_gst/get_video_service` 开启，并在退出时调用 `/video_gst/end_video_service` 释放，两者参数均为 `{resolution: jpeg}`。系统需提供 ROS2 Foxy、rclpy 和这两个原厂服务。
 - `18080` 和 `18081` 回环端口未被其他进程占用。
 
 ## 已有 Electron 云端展示框架的狗端试运行
@@ -120,7 +120,7 @@ sha256=<64 位 SHA-256>
 ```bash
 cd /home/unitree/magic-gesture-paradise/rps-kids-h5
 mkdir -p build/run
-tar -xzf build/smartapp/rock_paper_scissors-0.1.12.tar.gz -C build/run
+tar -xzf build/smartapp/rock_paper_scissors-0.1.13.tar.gz -C build/run
 python3 scripts/run-dog-standalone.py --camera-source forehead
 ```
 
