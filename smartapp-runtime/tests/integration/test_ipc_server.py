@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import json
 import os
 import socket
@@ -469,13 +470,56 @@ class AgentServerTests(unittest.IsolatedAsyncioTestCase):
             return False
 
         await self.restart_with(on_connected=on_connected)
-        reader, writer = await self.connect()
-        writer.write(encode({"requestId": "must-not-run", "command": "get_status"}))
-        await writer.drain()
-        self.assertEqual(await asyncio.wait_for(reader.read(), 1), b"")
-        self.assertEqual(calls, 1)
-        self.assertEqual(self.coordinator.commands, [])
-        await self.close_client(writer)
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        errors = []
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+        try:
+            reader, writer = await self.connect()
+            try:
+                writer.write(encode({"requestId": "must-not-run", "command": "get_status"}))
+                await writer.drain()
+                self.assertEqual(await asyncio.wait_for(reader.read(), 1), b"")
+            except ConnectionError:
+                # Linux may reset a Unix socket closed with unread input.
+                pass
+            finally:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except ConnectionError:
+                    pass
+            await self.wait_until(lambda: not self.server._owned_tasks)
+            self.assertEqual(calls, 1)
+            self.assertEqual(self.coordinator.commands, [])
+            del reader, writer
+            gc.collect()
+            await asyncio.sleep(0)
+            self.assertEqual(errors, [])
+        finally:
+            loop.set_exception_handler(previous_handler)
+
+    async def test_reader_reset_closes_connection_without_unretrieved_exceptions(self):
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        errors = []
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+        try:
+            reader, writer = await self.connect()
+            await self.wait_until(lambda: self.server.connected)
+            self.server._connection.reader.set_exception(
+                ConnectionResetError("peer reset while reading")
+            )
+            self.assertEqual(await asyncio.wait_for(reader.read(), 1), b"")
+            await self.close_client(writer)
+            await self.wait_until(lambda: not self.server._owned_tasks)
+            del reader, writer
+            gc.collect()
+            await asyncio.sleep(0)
+            self.assertEqual(errors, [])
+            self.assertEqual(self.coordinator.commands, [])
+        finally:
+            loop.set_exception_handler(previous_handler)
 
     async def test_stop_and_detach_wake_fifo_progress_barrier(self):
         for action in ("stop", "detach"):

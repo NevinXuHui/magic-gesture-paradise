@@ -54,6 +54,19 @@ class ProtocolTest(unittest.TestCase):
 
 
 class CameraConfigurationTest(unittest.TestCase):
+    def test_camera_fps_defaults_and_override(self):
+        with patch.dict(backend.os.environ, {}, clear=True):
+            self.assertEqual(backend.parse_camera_fps(), 8)
+        for value in ('1', '6', '8', '10', '30'):
+            with self.subTest(value=value), patch.dict(backend.os.environ, RPS_CAMERA_FPS=value):
+                self.assertEqual(backend.parse_camera_fps(), int(value))
+
+    def test_camera_fps_rejects_invalid_values(self):
+        for value in ('0', '-1', '31', '8.5', '', 'invalid'):
+            with self.subTest(value=value), patch.dict(backend.os.environ, RPS_CAMERA_FPS=value):
+                with self.assertRaisesRegex(ValueError, 'RPS_CAMERA_FPS'):
+                    backend.parse_camera_fps()
+
     def test_defaults_to_neck_for_legacy_runtime_init(self):
         self.assertEqual(backend.parse_camera_source({'event': 'runtime_init'}), 'neck')
 

@@ -60,7 +60,7 @@ test('continuous back-and-forth shaking never passes the stop gate',()=>{
 })
 test('round waits for shake, commits computer before user, reveals together and auto resets',()=>{
   let calls=0
-  const game=new GameRound({choose:()=>{calls++;return 'peace'}})
+  const game=new GameRound({choose:()=>{calls++;return 'peace'},revealMs:420})
   assert.equal(game.update({now:0,recognized:{stable:true,id:'fist'}}).phase,'waiting')
   assert.deepEqual(game.update({now:100,shake:true}),{phase:'shaking',user:null,computer:null,outcome:null,rounds:0})
   assert.equal(calls,1)

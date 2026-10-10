@@ -34,6 +34,7 @@ inference = None
 latest_update = 0.0
 camera_problem = "等待摄像头初始化"
 camera_source = "neck"
+camera_fps = 8
 
 
 def log(message):
@@ -65,6 +66,16 @@ def selected_camera():
     return CAMERA_SOURCES[camera_source]
 
 
+def parse_camera_fps():
+    try:
+        fps = int(os.environ.get("RPS_CAMERA_FPS", "8"))
+    except ValueError as error:
+        raise ValueError("RPS_CAMERA_FPS must be an integer from 1 to 30") from error
+    if not 1 <= fps <= 30:
+        raise ValueError("RPS_CAMERA_FPS must be an integer from 1 to 30")
+    return fps
+
+
 def find_stream():
     path = selected_camera()["path"]
     return path if os.path.exists(path) else None
@@ -85,10 +96,10 @@ def capture():
             "shmsrc socket-path={0} is-live=true do-timestamp=true ! "
             "image/jpeg,width=1920,height=1080,framerate=30/1 ! "
             "queue leaky=downstream max-size-buffers=1 max-size-bytes=0 max-size-time=0 ! "
-            "videorate drop-only=true ! image/jpeg,framerate=10/1 ! jpegdec ! "
+            "videorate drop-only=true ! image/jpeg,framerate={1}/1 ! jpegdec ! "
             "videoconvert ! videoscale ! video/x-raw,format=BGR,width=640,height=360 ! "
             "appsink drop=true max-buffers=1 sync=false"
-        ).format(stream_path)
+        ).format(stream_path, camera_fps)
         capture_device = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
         try:
             if not capture_device.isOpened():
@@ -207,13 +218,15 @@ def terminate(_signum, _frame):
 
 
 def main():
-    global camera_problem, camera_source, inference
+    global camera_problem, camera_source, camera_fps, inference
     signal.signal(signal.SIGTERM, terminate)
     signal.signal(signal.SIGINT, terminate)
     camera_source = parse_camera_source(read_runtime_init())
+    camera_fps = parse_camera_fps()
     camera = selected_camera()
     camera_problem = "等待{0}共享流".format(camera["name"])
     log("摄像头配置 {0} -> {1}".format(camera_source, camera["path"]))
+    log("摄像头推理频率上限 {0} fps".format(camera_fps))
     # Initialize before app_ready; stdout remains exclusively Runtime JSONL.
     from inference import Inference
     cv2.setNumThreads(1)

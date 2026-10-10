@@ -19,10 +19,13 @@ const FFMPEG = process.env.FFMPEG_BIN || 'ffmpeg'
 let windowRef
 let encoder
 let frameTimer
+let ownershipTimer
 let latestFrame
+let latestFrameSize
 let firstPaint = false
 let pageLoaded = false
 let readySent = false
+let rendererReadyEmitted = false
 let claiming = false
 let stopping = false
 const pendingAppData = []
@@ -91,6 +94,7 @@ async function waitForExpressionReady(timeoutMs = 9000) {
 
 function startEncoder(width, height) {
   if (encoder || stopping) return
+  latestFrameSize = { width, height }
   const transform = width === PAGE_WIDTH && height === PAGE_HEIGHT
     ? 'transpose=2'
     : `scale=${PAGE_WIDTH}:${PAGE_HEIGHT}:flags=fast_bilinear,transpose=2`
@@ -110,11 +114,38 @@ function startEncoder(width, height) {
   encoder.on('exit', (code, signal) => {
     encoder = null
     if (!stopping) {
-      log(`FFmpeg 意外退出: code=${code} signal=${signal || 'none'}`)
-      app.exit(1)
+      log(`FFmpeg exited; reclaiming display: code=${code} signal=${signal || 'none'}`)
+      scheduleDisplayReclaim()
     }
   })
   log(`FFmpeg ${width}x${height} -> ${PAGE_HEIGHT}x${PAGE_WIDTH}@${FPS}`)
+}
+
+function ensureEncoder() {
+  if (!encoder && latestFrameSize) startEncoder(latestFrameSize.width, latestFrameSize.height)
+}
+
+function scheduleDisplayReclaim() {
+  if (stopping) return
+  readySent = false
+  setTimeout(() => {
+    if (stopping) return
+    ensureEncoder()
+    void claimDisplay()
+  }, 250)
+}
+
+async function verifyDisplayOwnership() {
+  if (stopping || claiming || !readySent) return
+  try {
+    const current = await mpvRequest(['get_property', 'path'], 1000)
+    if (String(current.data || '') !== OUTPUT_FIFO) {
+      log(`MPV path changed: ${current.data || '<empty>'}`)
+      scheduleDisplayReclaim()
+    }
+  } catch (error) {
+    log(`MPV ownership check failed: ${error.message}`)
+  }
 }
 
 async function claimDisplay() {
@@ -134,11 +165,19 @@ async function claimDisplay() {
     await mpvRequest(['set_property', 'pause', false])
     await waitForMpvPath(OUTPUT_FIFO)
     readySent = true
-    emit({ event: 'renderer_ready' })
+    if (!rendererReadyEmitted) {
+      rendererReadyEmitted = true
+      emit({ event: 'renderer_ready' })
+    }
     while (pendingAppData.length > 0) emit(pendingAppData.shift())
   } catch (error) {
-    log(`接管屏幕失败: ${error.message}`)
-    app.exit(1)
+    if (!rendererReadyEmitted) {
+      log(`接管屏幕失败: ${error.message}`)
+      app.exit(1)
+    } else {
+      log(`接管屏幕失败，将重试: ${error.message}`)
+      setTimeout(scheduleDisplayReclaim, 1000)
+    }
   } finally {
     claiming = false
   }
@@ -191,6 +230,7 @@ function cleanup() {
   if (stopping) return
   stopping = true
   if (frameTimer) clearInterval(frameTimer)
+  if (ownershipTimer) clearInterval(ownershipTimer)
   if (encoder) {
     encoder.stdin.destroy()
     encoder.kill('SIGTERM')
@@ -218,6 +258,7 @@ function createWindow() {
   windowRef.webContents.on('paint', (_event, _dirty, image) => {
     const bitmap = image.toBitmap()
     const size = image.getSize()
+    latestFrameSize = { width: size.width, height: size.height }
     if (!encoder) startEncoder(size.width, size.height)
     if (bitmap.length === size.width * size.height * 4) latestFrame = bitmap
     if (!firstPaint) {
@@ -248,10 +289,18 @@ app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('disable-dev-shm-usage')
 app.commandLine.appendSwitch('mute-audio')
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
-app.commandLine.appendSwitch('use-gl', 'angle')
-app.commandLine.appendSwitch('use-angle', 'swiftshader')
-app.commandLine.appendSwitch('enable-unsafe-swiftshader')
-app.commandLine.appendSwitch('ignore-gpu-blocklist')
+const renderMode = process.env.SCREEN_RENDER_MODE || 'software'
+if (renderMode === 'software') {
+  app.disableHardwareAcceleration()
+} else if (renderMode === 'swiftshader') {
+  app.commandLine.appendSwitch('use-gl', 'angle')
+  app.commandLine.appendSwitch('use-angle', 'swiftshader')
+  app.commandLine.appendSwitch('enable-unsafe-swiftshader')
+  app.commandLine.appendSwitch('ignore-gpu-blocklist')
+} else {
+  throw Error(`不支持的 SCREEN_RENDER_MODE: ${renderMode}`)
+}
+log(`Render mode: ${renderMode}`)
 
 app.whenReady().then(() => {
   if (!URL || !existsSync(OUTPUT_FIFO) || !existsSync(MPV_SOCKET)) {
@@ -262,6 +311,7 @@ app.whenReady().then(() => {
   installBridge()
   createWindow()
   frameTimer = setInterval(writeLatestFrame, 1000 / FPS)
+  ownershipTimer = setInterval(() => { void verifyDisplayOwnership() }, 1000)
 })
 
 for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) {

@@ -29,7 +29,7 @@ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
   npm run --prefix /opt/smartapp-runtime/renderer install:electron
 ```
 
-OpenGL/WebGL 使用 Electron 的 ANGLE/SwiftShader。设备必须已有 `/tmp/mpv-socket`，并允许 Runtime 服务账号访问该 socket、X11 临时目录和 ROS2 表情服务。
+默认使用纯软件离屏渲染，适合 DOM/CSS 页面。需要 OpenGL/WebGL 的应用应通过 `SCREEN_RENDER_MODE=swiftshader` 选择 ANGLE/SwiftShader。设备必须已有 `/tmp/mpv-socket`，并允许 Runtime 服务账号访问该 socket、X11 临时目录和 ROS2 表情服务。
 
 ## Runtime 配置
 
@@ -56,6 +56,7 @@ restore_argv = ["/opt/smartapp-runtime/renderer/restore-expression.sh"]
 | `MPV_SOCKET` | `/tmp/mpv-socket` | 设备 MPV IPC socket |
 | `SCREEN_DISPLAY` | `:99` | Xvfb 显示号 |
 | `SCREEN_FPS` | `15` | 输出帧率 |
+| `SCREEN_RENDER_MODE` | `software` | `software` 为纯软件离屏渲染；`swiftshader` 保留 WebGL 支持 |
 | `SCREEN_RUNTIME_DIR` | `/run/smartapp-renderer` | FIFO、日志和用户数据目录 |
 
 ## H5 Bridge

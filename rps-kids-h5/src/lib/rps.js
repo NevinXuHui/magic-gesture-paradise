@@ -75,6 +75,12 @@ export function rpsScores(categories=[],world,landmarks){
   }
 }
 
+export function updateStoppedRecognition(still,motion,frame){
+  // Accumulate pose stability while the independent palm stop gate settles.
+  const recognition=still.update(frame)
+  return motion.stopped?recognition:null
+}
+
 export class StillRps {
   constructor(){this.reset()}
   reset(){this.last=null;this.anchor=null;this.since=0;this.time=0;this.samples=[];this.motionFrames=0}

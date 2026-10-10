@@ -39,8 +39,8 @@ export class FistShake {
 }
 
 // Once a round has started, keep watching the palm itself.  The classifier is
-// deliberately not fed until motion has genuinely ended, so a slow continuous
-// shake cannot be mistaken for a steady rock.
+// checked independently of pose stability, so a slow continuous shake cannot
+// be mistaken for a steady rock.
 export class ShakeStopGate {
   constructor(){this.reset()}
   reset(){this.last=null;this.anchor=null;this.time=0;this.stoppedSince=null;this.history=[]}
@@ -69,7 +69,7 @@ export class ShakeStopGate {
 }
 
 export class GameRound {
-  constructor({choose=randomHand,revealMs=420,resultMs=1200,minShakeMs=850,timeoutMs=10000}={}){
+  constructor({choose=randomHand,revealMs=200,resultMs=1200,minShakeMs=850,timeoutMs=10000}={}){
     Object.assign(this,{choose,revealMs,resultMs,minShakeMs,timeoutMs});this.rounds=0;this.reset()
   }
   reset(){this.phase='waiting';this.computer=null;this.user=null;this.outcome=null;this.since=0;this.lastHand=null;this.pendingShake=false}

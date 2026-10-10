@@ -1,7 +1,7 @@
 <script setup>
 import {ref,computed,onMounted,onBeforeUnmount} from 'vue'
 import GameSprite from './components/GameSprite.vue'
-import {StillRps,rpsScores} from './lib/rps.js'
+import {StillRps,rpsScores,updateStoppedRecognition} from './lib/rps.js'
 import {MotionTarget} from './lib/target.js'
 import {GameRound,FistShake,ShakeStopGate,LABELS} from './lib/game.js'
 import {gameResultData} from './lib/report.js'
@@ -212,12 +212,11 @@ function receive({result,ms,timestamp}){
     trigger=target.changed||shake.update({points:p,isFist,now:timestamp,amplitude:settings.value.amplitude})
   }else if(before==='shaking'){
     shakeMotion=shakeStop.update({points:p,now:timestamp,aspect,motionSpeed:settings.value.motionSpeed,maxDrift:settings.value.maxDrift})
+    recognition=updateStoppedRecognition(still,shakeMotion,{landmarks:p,worldLandmarks:world,categories,now:timestamp,handCount:p?1:0,aspect,...settings.value})
     if(shakeMotion.stopped){
       motionHint.value='recognizing'
-      recognition=still.update({landmarks:p,worldLandmarks:world,categories,now:timestamp,handCount:p?1:0,aspect,...settings.value})
     }else{
       motionHint.value=shakeMotion.moving?'moving':'ending'
-      still.reset()
     }
   }else if(before==='result'){
     const scores=handScores[index]||{fist:0,peace:0,palm:0}

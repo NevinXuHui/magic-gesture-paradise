@@ -55,6 +55,9 @@ class SignalFailureProcess:
     def close(self):
         self.closed = True
 
+    async def wait_closed(self):
+        pass
+
     async def wait(self):
         await self.exited.wait()
         return self.returncode
@@ -176,6 +179,7 @@ class SupervisorTests(unittest.IsolatedAsyncioTestCase):
         for pid in self.pids:
             await self.wait_until(lambda pid=pid: not self.pid_exists(pid))
         await asyncio.sleep(0)
+        gc.collect()
         leaked = [task for task in asyncio.all_tasks() - self.initial_tasks
                   if task is not asyncio.current_task() and not task.done()]
         self.loop.set_exception_handler(self.old_handler)

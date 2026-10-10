@@ -173,20 +173,25 @@ class LoggingTests(unittest.TestCase):
             self.assertTrue((original_logs / "runtime.jsonl").is_file())
 
     def test_reconfiguration_replaces_and_closes_handlers_without_duplicates(self):
-        first_stream = io.StringIO()
         second_stream = io.StringIO()
-        config = RuntimeConfig(logging=LoggingConfig(level="INFO", target="stderr"))
-        with patch("smartapp_runtime.logging.sys.stderr", first_stream):
-            configure_logging(config)
-        first = logging.getLogger().handlers[0]
-        with patch("smartapp_runtime.logging.sys.stderr", second_stream):
-            configure_logging(config)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            log_path = root / "runtime.jsonl"
+            configure_logging(RuntimeConfig(
+                paths=PathsConfig(root=root, log=log_path),
+                logging=LoggingConfig(level="INFO", target="file"),
+            ))
+            first_stream = logging.getLogger().handlers[0].stream
+            self.assertFalse(first_stream.closed)
+            config = RuntimeConfig(logging=LoggingConfig(level="INFO", target="stderr"))
+            with patch("smartapp_runtime.logging.sys.stderr", second_stream):
+                configure_logging(config)
 
-        self.assertEqual(len(logging.getLogger().handlers), 1)
-        self.assertTrue(first._closed)
-        logging.getLogger("smartapp.test").warning("once")
-        self.assertEqual(first_stream.getvalue(), "")
-        self.assertEqual(len(second_stream.getvalue().splitlines()), 1)
+            self.assertEqual(len(logging.getLogger().handlers), 1)
+            self.assertTrue(first_stream.closed)
+            logging.getLogger("smartapp.test").warning("once")
+            self.assertEqual(log_path.read_text(encoding="utf-8"), "")
+            self.assertEqual(len(second_stream.getvalue().splitlines()), 1)
 
     def test_file_target_writes_utf8_json_after_parent_exists(self):
         with tempfile.TemporaryDirectory() as raw:

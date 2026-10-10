@@ -283,6 +283,8 @@ class AgentServer:
         while self._running and self._connection is connection:
             try:
                 line = await connection.reader.readline()
+            except (ConnectionError, OSError):
+                return
             except ValueError:
                 await self._send_validation(connection, "invalid", fatal=True)
                 return

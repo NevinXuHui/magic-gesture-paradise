@@ -457,6 +457,12 @@ class ProcessSupervisor:
             self._discard(active.process.stderr), active.process.wait(), return_exceptions=True)
         failed = failed or any(isinstance(result, BaseException) for result in results)
         try:
+            await active.process.stdin.wait_closed()
+        except (BrokenPipeError, ConnectionError):
+            pass
+        except Exception:
+            failed = True
+        try:
             self.repository.clear_backend_process()
         except Exception:
             failed = True

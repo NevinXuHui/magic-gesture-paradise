@@ -1,6 +1,13 @@
+import importlib.util
 import unittest
+from pathlib import Path
 
-from examples.agent_client import _matches_subscription
+
+_client_path = Path(__file__).resolve().parents[2] / "examples" / "agent_client.py"
+_client_spec = importlib.util.spec_from_file_location("agent_client_example", _client_path)
+_client_module = importlib.util.module_from_spec(_client_spec)
+_client_spec.loader.exec_module(_client_module)
+_matches_subscription = _client_module._matches_subscription
 
 
 class AgentClientTests(unittest.TestCase):
