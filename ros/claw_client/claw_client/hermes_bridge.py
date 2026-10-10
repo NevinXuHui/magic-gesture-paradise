@@ -1492,9 +1492,8 @@ class HermesBridge(SpeechCoreClientNode):
             self.logger.error(f"[robot_game_view:start] invalid SmartApp package fields: {event_id}")
             return
         init_data = dict(body.get("data", {}))
-        # 云端应用 ID 与游戏包 manifest.appId 不同，两种入口使用相同默认相机。
-        if app_id in ("rock_paper_scissors", "llm_app_2d424502d2f34173bfa77c704a823bcf"):
-            init_data.setdefault("cameraSource", "forehead")
+        # 云端下发的应用统一默认使用额头相机，保留显式指定的相机来源。
+        init_data.setdefault("cameraSource", "forehead")
         command = {
             "requestId": uuid.uuid4().hex,
             "command": "start_app",

@@ -47,9 +47,13 @@ class SmartAppCameraTest(unittest.TestCase):
                                      {"cameraSource": "neck"}),
                          {"cameraSource": "neck"})
 
-    def test_other_apps_receive_original_data(self):
+    def test_other_cloud_apps_also_default_to_forehead(self):
         self.assertEqual(self.forward("cloud_show_display", {"word": "hello"}),
-                         {"word": "hello"})
+                         {"word": "hello", "cameraSource": "forehead"})
+
+    def test_other_cloud_apps_preserve_explicit_camera(self):
+        self.assertEqual(self.forward("another_cloud_app", {"cameraSource": "neck"}),
+                         {"cameraSource": "neck"})
 
 
 if __name__ == "__main__":
