@@ -6,6 +6,7 @@ import signal
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # SmartApp bundles Linux ARM64 / CPython 3.8 inference modules beside this file.
@@ -14,11 +15,7 @@ vendor_dir = os.path.join(os.path.dirname(__file__), "vendor")
 if os.path.isdir(vendor_dir):
     sys.path.insert(0, vendor_dir)
 
-try:
-    import cv2
-except ImportError as error:
-    print("backend requires the target image to provide python3-opencv", file=sys.stderr)
-    raise SystemExit(1) from error
+cv2 = None
 
 
 CAMERA_SOURCES = {
@@ -224,24 +221,61 @@ def main():
     camera_source = parse_camera_source(read_runtime_init())
     camera_fps = parse_camera_fps()
     from camera_stream import CameraStream
-    with CameraStream(camera_source, log=log):
-        run_game()
+    started = time.monotonic()
+    handed_off = False
+    with ThreadPoolExecutor(max_workers=1) as startup:
+        pending = startup.submit(initialize_inference)
+        try:
+            with CameraStream(camera_source, log=log):
+                log("启动阶段 camera-stream: {0:.0f} ms".format((time.monotonic() - started) * 1000))
+                model = pending.result()
+                log("启动阶段 camera+model: {0:.0f} ms".format((time.monotonic() - started) * 1000))
+                handed_off = True
+                run_game(model)
+        finally:
+            # A model completed during camera failure still needs releasing.
+            if not handed_off:
+                try:
+                    model = pending.result()
+                except BaseException:
+                    pass
+                else:
+                    try:
+                        model.close()
+                    except Exception as error:
+                        log("释放未启用模型失败：{0}".format(error))
 
 
-def run_game():
+def initialize_inference():
+    global cv2
+    started = time.monotonic()
+    try:
+        import cv2 as opencv
+    except ImportError as error:
+        raise RuntimeError("backend requires the target image to provide python3-opencv") from error
+    cv2 = opencv
+    from inference import Inference
+    cv2.setNumThreads(1)
+    model = Inference()
+    log("启动阶段 model-load: {0:.0f} ms".format((time.monotonic() - started) * 1000))
+    return model
+
+
+def run_game(model):
     global camera_problem, inference
     camera = selected_camera()
     camera_problem = "等待{0}共享流".format(camera["name"])
     log("摄像头配置 {0} -> {1}".format(camera_source, camera["path"]))
     log("摄像头推理频率上限 {0} fps".format(camera_fps))
-    # Initialize before app_ready; stdout remains exclusively Runtime JSONL.
-    from inference import Inference
-    cv2.setNumThreads(1)
-    inference = Inference()
+    inference = model
 
-    host = os.environ.get("SMARTAPP_DYNAMIC_HOST", "127.0.0.1")
-    port = int(os.environ.get("SMARTAPP_DYNAMIC_PORT", "18081"))
-    server = CameraServer((host, port), Handler)
+    try:
+        host = os.environ.get("SMARTAPP_DYNAMIC_HOST", "127.0.0.1")
+        port = int(os.environ.get("SMARTAPP_DYNAMIC_PORT", "18081"))
+        server = CameraServer((host, port), Handler)
+    except BaseException:
+        inference.close()
+        raise
     camera_thread = threading.Thread(target=capture, name="camera-capture", daemon=True)
     server_thread = threading.Thread(target=server.serve_forever, name="camera-http", daemon=True)
     camera_thread.start()
