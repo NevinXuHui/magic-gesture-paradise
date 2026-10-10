@@ -28,7 +28,8 @@ let recordingData=null
 let stream,inferAbort,session=0,raf=0,timer=0,watchdog=0,busy=false,recognizerReady=false,lastDispatch=0,lastVideoTime=-1,lastResult=0,clockId=0,fpsSince=0,fpsCount=0,frameWidth=0,frameHeight=0,lastSequence=-1,startupFrame=0,startupTimer=0
 const outcomeText={win:['你赢了！','耶！你是出拳小高手'],lose:['你输了','没关系，再来挑战小汪吧！'],draw:['平局','再来一局吧！']}
 const visibleHands=computed(()=>['revealing','result'].includes(round.value.phase))
-const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
+const showSetup=computed(()=>!ready.value&&(!smartAppMode||Boolean(error.value)))
+const title=computed(()=>showSetup.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
 const subtitle=computed(()=>!ready.value?'请稍等，马上就好':round.value.phase==='result'?outcomeText[round.value.outcome][1]:round.value.phase==='revealing'?'看看谁更厉害':round.value.phase==='shaking'?'选好手势，停稳亮出来！':'伸出手上下摇一摇，小汪陪你玩')
 const animatePhase=computed(()=>ready.value?round.value.phase:'waiting')
 const phaseNames={moving:'手在移动',settling:'等待停稳',recognized:'已确认',unclear:'手型不明确',no_hand:'等待主手',multiple:'检测到多手'}
@@ -323,7 +324,7 @@ onMounted(()=>{
   }
   window.addEventListener('keydown',keys);document.addEventListener('visibilitychange',visibility)
   clockId=setInterval(clockTick,80)
-  // Let the loading view reach the physical display before camera and Python
+  // Let the game view reach the physical display before camera and Python
   // initialization compete for CPU on the target device.
   startupFrame=requestAnimationFrame(()=>{startupFrame=0;startupTimer=setTimeout(()=>{startupTimer=0;start()},0)})
   const context=document.modelContext
@@ -354,7 +355,7 @@ onBeforeUnmount(()=>{cancelAnimationFrame(startupFrame);clearTimeout(startupTime
         </template>
         <template v-else><i v-for="n in 12" :key="n" class="tie-star" :style="{'--i':n}">✦</i><div class="tie-badge"><div class="tie-sparks">✦ ˙ ✦</div><strong>平局</strong><span>再来一局吧！</span></div></template>
       </div>
-      <div v-if="!ready" class="setup-overlay"><img :src="`${base}art/dog_mascot.webp`" alt="小汪"/><h2>{{message}}</h2><p>{{error||'第一次使用时，请允许浏览器访问摄像头'}}</p><small v-if="error">请大人帮忙 · 按 R 重试</small><div v-else class="loading-dots">● ● ●</div></div>
+      <div v-if="showSetup" class="setup-overlay"><img :src="`${base}art/dog_mascot.webp`" alt="小汪"/><h2>{{message}}</h2><p>{{error||'第一次使用时，请允许浏览器访问摄像头'}}</p><small v-if="error">请大人帮忙 · 按 R 重试</small><div v-else class="loading-dots">● ● ●</div></div>
     </main>
     <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
     <button v-else-if="!debug&&!screenMode&&!smartAppMode" class="debug-open" @click="debug=true">摄像头调试 · D</button>
