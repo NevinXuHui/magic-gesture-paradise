@@ -209,7 +209,11 @@ async function capture(now){
     if(token!==session)return
     if(useServerCamera){
       if(data.sequence===lastSequence){if(recording.value)logEvent('duplicate_frame',`sequence=${data.sequence},age_ms=${data.ageMs}`);clearTimeout(watchdog);busy=false;return}
-      if(data.ageMs>1400)throw Error('摄像头识别帧已过期，请重连')
+      if(data.ageMs>1400){
+        clearTimeout(watchdog);busy=false
+        resetInteraction();message.value='等待摄像头恢复画面'
+        return
+      }
       lastSequence=data.sequence;frameWidth=data.width;frameHeight=data.height
       if((debug.value||recording.value)&&data.preview){
         const decodeStarted=performance.now()

@@ -20,6 +20,8 @@ let windowRef
 let encoder
 let frameTimer
 let ownershipTimer
+let reclaimTimer
+let restartingDisplay = false
 let latestFrame
 let latestFrameSize
 let firstPaint = false
@@ -128,9 +130,21 @@ function ensureEncoder() {
 function scheduleDisplayReclaim() {
   if (stopping) return
   readySent = false
-  setTimeout(() => {
+  if (!restartingDisplay) {
+    restartingDisplay = true
+    // A new FIFO reader must receive a fresh NUT header, not a midstream frame.
+    if (encoder) encoder.kill('SIGTERM')
+  }
+  if (reclaimTimer) return
+  reclaimTimer = setTimeout(() => {
+    reclaimTimer = null
     if (stopping) return
+    if (encoder || claiming) {
+      scheduleDisplayReclaim()
+      return
+    }
     ensureEncoder()
+    restartingDisplay = false
     void claimDisplay()
   }, 250)
 }
@@ -184,7 +198,7 @@ async function claimDisplay() {
 }
 
 function writeLatestFrame() {
-  if (stopping || !latestFrame || !encoder?.stdin?.writable || encoder.stdin.writableNeedDrain) return
+  if (stopping || restartingDisplay || !latestFrame || !encoder?.stdin?.writable || encoder.stdin.writableNeedDrain) return
   encoder.stdin.write(latestFrame)
 }
 
@@ -231,6 +245,7 @@ function cleanup() {
   stopping = true
   if (frameTimer) clearInterval(frameTimer)
   if (ownershipTimer) clearInterval(ownershipTimer)
+  if (reclaimTimer) clearTimeout(reclaimTimer)
   if (encoder) {
     encoder.stdin.destroy()
     encoder.kill('SIGTERM')
@@ -259,7 +274,7 @@ function createWindow() {
     const bitmap = image.toBitmap()
     const size = image.getSize()
     latestFrameSize = { width: size.width, height: size.height }
-    if (!encoder) startEncoder(size.width, size.height)
+    if (!encoder && !restartingDisplay) startEncoder(size.width, size.height)
     if (bitmap.length === size.width * size.height * 4) latestFrame = bitmap
     if (!firstPaint) {
       firstPaint = true

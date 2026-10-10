@@ -1491,6 +1491,9 @@ class HermesBridge(SpeechCoreClientNode):
                 or type(body.get("data", {})) is not dict):
             self.logger.error(f"[robot_game_view:start] invalid SmartApp package fields: {event_id}")
             return
+        init_data = dict(body.get("data", {}))
+        if app_id == "rock_paper_scissors":
+            init_data.setdefault("cameraSource", "forehead")
         command = {
             "requestId": uuid.uuid4().hex,
             "command": "start_app",
@@ -1500,7 +1503,7 @@ class HermesBridge(SpeechCoreClientNode):
             "packageUrl": body["packageUrl"],
             "packageSize": body["packageSize"],
             digest_field: digest,
-            "initData": body.get("data", {}),
+            "initData": init_data,
         }
         if not self._send_runtime_command(command, timeout=180.0):
             return
