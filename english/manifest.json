@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appId": "cloud_show_display",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "web": {
     "enabled": true,
     "entry": "index.html"

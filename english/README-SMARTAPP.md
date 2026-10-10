@@ -9,7 +9,7 @@ npm test
 npm run build:smartapp
 ```
 
-产物位于 `build/smartapp/cloud_show_display-0.2.0.tar.gz`。Runtime 启动后，向该应用发送如下 `cloud_data.data` 即可展示英文单词：
+产物位于 `build/smartapp/cloud_show_display-0.2.1.tar.gz`。Runtime 启动后，向该应用发送如下 `cloud_data.data` 即可展示英文单词：
 
 ```json
 {"word":"Apple","meaning":"苹果"}
