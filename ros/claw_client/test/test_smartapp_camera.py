@@ -38,6 +38,15 @@ class SmartAppCameraTest(unittest.TestCase):
         self.assertEqual(self.forward("rock_paper_scissors", {"cameraSource": "neck"}),
                          {"cameraSource": "neck"})
 
+    def test_cloud_rps_id_defaults_to_forehead(self):
+        self.assertEqual(self.forward("llm_app_2d424502d2f34173bfa77c704a823bcf", {}),
+                         {"cameraSource": "forehead"})
+
+    def test_cloud_rps_id_preserves_explicit_neck(self):
+        self.assertEqual(self.forward("llm_app_2d424502d2f34173bfa77c704a823bcf",
+                                     {"cameraSource": "neck"}),
+                         {"cameraSource": "neck"})
+
     def test_other_apps_receive_original_data(self):
         self.assertEqual(self.forward("cloud_show_display", {"word": "hello"}),
                          {"word": "hello"})
