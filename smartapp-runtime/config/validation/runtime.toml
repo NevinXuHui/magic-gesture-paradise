@@ -26,7 +26,7 @@ max_queue_messages = 128
 max_queue_bytes = 4194304
 
 [process]
-env_passthrough = ["PATH", "LANG", "LC_ALL", "ROS_DOMAIN_ID", "RMW_IMPLEMENTATION"]
+env_passthrough = ["PATH", "HOME", "ROS_LOG_DIR", "LANG", "LC_ALL", "ROS_DOMAIN_ID", "RMW_IMPLEMENTATION"]
 protocol_violation_limit = 5
 
 [renderer]

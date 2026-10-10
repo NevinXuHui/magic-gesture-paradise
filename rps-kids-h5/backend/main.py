@@ -218,11 +218,18 @@ def terminate(_signum, _frame):
 
 
 def main():
-    global camera_problem, camera_source, camera_fps, inference
+    global camera_source, camera_fps
     signal.signal(signal.SIGTERM, terminate)
     signal.signal(signal.SIGINT, terminate)
     camera_source = parse_camera_source(read_runtime_init())
     camera_fps = parse_camera_fps()
+    from camera_stream import CameraStream
+    with CameraStream(camera_source, log=log):
+        run_game()
+
+
+def run_game():
+    global camera_problem, inference
     camera = selected_camera()
     camera_problem = "等待{0}共享流".format(camera["name"])
     log("摄像头配置 {0} -> {1}".format(camera_source, camera["path"]))
@@ -267,6 +274,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
         log("启动失败：{0}".format(error))
         raise SystemExit(1)
