@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {GameRound,FistShake,ShakeStopGate,winner,randomHand,HANDS} from '../src/lib/game.js'
+import {GameRound,HandShake,ShakeStopGate,winner,randomHand,HANDS} from '../src/lib/game.js'
 
 test('all nine outcomes and fair random mapping',()=>{
   const outcomes=[['draw','win','lose'],['lose','draw','win'],['win','lose','draw']]
@@ -19,20 +19,18 @@ test('finger depth flicker does not restart the palm stop gate',()=>{
  assert.equal(out.stopped,true)
  assert.equal(gate.update({points:points(.08),now:15*67}).stopped,false)
 })
-test('only a vertical fist reversal starts a shake',()=>{
-  const shake=new FistShake()
-  for(let now=0;now<1000;now+=100)assert.equal(shake.update({points:points(),isFist:true,now}),false)
+test('a vertical hand reversal starts a shake regardless of hand shape',()=>{
+  const shake=new HandShake()
+  for(let now=0;now<1000;now+=100)assert.equal(shake.update({points:points(),now}),false)
   shake.reset()
-  assert.equal(shake.update({points:points(),isFist:true,now:0}),false)
-  assert.equal(shake.update({points:points(-.04),isFist:true,now:100}),false)
-  assert.equal(shake.update({points:points(.01),isFist:true,now:200}),true)
-  for(const fist of [true,false]){
-    shake.reset()
-    for(let t=0;t<6;t++)assert.equal(shake.update({points:points(0,t%2*.05),isFist:fist,now:t*100}),false)
-  }
-  shake.reset();shake.update({points:points(),isFist:true,now:0});shake.update({points:points(-.05),isFist:true,now:100})
-  shake.update({points:null,isFist:true,now:150})
-  assert.equal(shake.update({points:points(.02),isFist:true,now:200}),false)
+  assert.equal(shake.update({points:points(),now:0}),false)
+  assert.equal(shake.update({points:points(-.04),now:100}),false)
+  assert.equal(shake.update({points:points(.01),now:200}),true)
+  shake.reset()
+  for(let t=0;t<6;t++)assert.equal(shake.update({points:points(0,t%2*.05),now:t*100}),false)
+  shake.reset();shake.update({points:points(),now:0});shake.update({points:points(-.05),now:100})
+  shake.update({points:null,now:150})
+  assert.equal(shake.update({points:points(.02),now:200}),false)
 })
 test('shake stop gate requires a quiet period after the last movement',()=>{
   const gate=new ShakeStopGate()
@@ -60,7 +58,7 @@ test('continuous back-and-forth shaking never passes the stop gate',()=>{
 })
 test('round waits for shake, commits computer before user, reveals together and auto resets',()=>{
   let calls=0
-  const game=new GameRound({choose:()=>{calls++;return 'peace'},revealMs:420})
+  const game=new GameRound({choose:()=>{calls++;return 'peace'},revealMs:420,resultMs:1200})
   assert.equal(game.update({now:0,recognized:{stable:true,id:'fist'}}).phase,'waiting')
   assert.deepEqual(game.update({now:100,shake:true}),{phase:'shaking',user:null,computer:null,outcome:null,rounds:0})
   assert.equal(calls,1)
@@ -74,16 +72,16 @@ test('round waits for shake, commits computer before user, reveals together and 
  assert.equal(game.update({now:4000,recognized:{stable:true,id:'fist'}}).phase,'waiting')
  assert.equal(calls,1)
 })
-test('shake during result is queued until the shorter result wait ends',()=>{
- const game=new GameRound({choose:()=> 'peace',resultMs:1200})
- game.update({now:0,shake:true})
- game.update({now:900,recognized:{stable:true,id:'fist'}})
- assert.equal(game.phase,'revealing')
- assert.equal(game.update({now:1420}).phase,'result')
- assert.equal(game.update({now:1800,shake:true,handPresent:true}).phase,'result')
- assert.equal(game.update({now:2619,handPresent:true}).phase,'result')
- assert.equal(game.update({now:2620,handPresent:true}).phase,'shaking')
- assert.equal(game.computer,'peace')
+test('all outcomes stay visible for 2500ms and shakes are not queued',()=>{
+ for(const user of HANDS){
+  const game=new GameRound({choose:()=> 'peace'})
+  game.update({now:0,shake:true});game.update({now:900,recognized:{stable:true,id:user}})
+  assert.equal(game.update({now:1020}).phase,'result')
+  for(const now of [1100,2000,3519])assert.equal(game.update({now,shake:true,handPresent:true}).phase,'result')
+  assert.equal(game.update({now:3520,shake:true,handPresent:true}).phase,'waiting')
+  assert.equal(game.update({now:3600}).phase,'waiting')
+  assert.equal(game.update({now:3700,shake:true}).phase,'shaking')
+ }
 })
 test('unclear pose cannot reveal; missing hand or round timeout cancels',()=>{
   const game=new GameRound({choose:()=> 'palm'})

@@ -84,7 +84,7 @@ export function updateStoppedRecognition(still,motion,frame){
 export class StillRps {
   constructor(){this.reset()}
   reset(){this.last=null;this.anchor=null;this.since=0;this.time=0;this.samples=[];this.motionFrames=0}
-  update({landmarks,worldLandmarks,categories=[],now,holdMs=250,aspect=4/3,handCount=1,motionSpeed=1.8,maxDrift=.22}){
+  update({landmarks,worldLandmarks,categories=[],now,holdMs=200,aspect=4/3,handCount=1,motionSpeed=1.8,maxDrift=.22}){
     if(handCount!==1||!valid(landmarks)){this.reset();return empty(handCount>1?'multiple':'no_hand')}
     const raw=landmarks.map(p=>({x:p.x*aspect,y:p.y,z:p.z*aspect}))
     // Smooth only the motion signal. Classification remains based on the
@@ -107,7 +107,7 @@ export class StillRps {
       return empty('moving')
     }
     this.motionFrames=0
-    this.samples.push(rpsScores(categories,worldLandmarks,raw));this.samples=this.samples.slice(-8)
+    this.samples.push(rpsScores(categories,worldLandmarks,raw));this.samples=this.samples.slice(-4)
     if(now-this.since<holdMs||this.samples.length<3)return empty('settling')
     const ranked=ids.map(id=>({id,value:this.samples.reduce((s,v)=>s+v.scores[id],0)/this.samples.length})).sort((a,b)=>b.value-a.value)
     const hasGeometry=this.samples.some(s=>s.hasGeometry)

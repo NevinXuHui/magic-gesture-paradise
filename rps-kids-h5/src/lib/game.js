@@ -11,21 +11,20 @@ export function randomHand(random=()=>crypto.getRandomValues(new Uint32Array(1))
   return HANDS[n%3]
 }
 
-// A deliberate fist must move vertically, then reverse by a meaningful
-// fraction of a palm length. A stationary fist never starts another round.
-export class FistShake {
+// Any visible hand can start a round after a deliberate vertical reversal.
+// A stationary hand never starts another round.
+export class HandShake {
   constructor(){this.reset()}
-  reset(){this.anchor=null;this.extreme=null;this.direction=0;this.time=null;this.since=null;this.lastFist=null}
-  update({points,isFist,now,amplitude=.22}){
+  reset(){this.anchor=null;this.extreme=null;this.direction=0;this.time=null;this.since=null}
+  update({points,now,amplitude=.22}){
     if(!points||points.length!==21){this.reset();return false}
-    if(!isFist){if(this.lastFist===null||now-this.lastFist>180)this.reset();return false}
     const y=[0,5,9,13,17].reduce((s,i)=>s+points[i].y,0)/5
     const x=[0,5,9,13,17].reduce((s,i)=>s+points[i].x,0)/5
     const size=Math.hypot(points[0].x-points[9].x,points[0].y-points[9].y)
     if(!Number.isFinite(size)||size<.025){this.reset();return false}
     const p={x,y,size}
     if(this.time===null||now-this.time>350||now-this.since>1600){this.reset();this.anchor=p;this.extreme=p;this.since=now}
-    this.time=now;this.lastFist=now
+    this.time=now
     const threshold=amplitude*size
     if(!this.direction){
       const dy=y-this.anchor.y
@@ -69,21 +68,16 @@ export class ShakeStopGate {
 }
 
 export class GameRound {
-  constructor({choose=randomHand,revealMs=200,resultMs=1200,minShakeMs=850,timeoutMs=10000}={}){
+  constructor({choose=randomHand,revealMs=120,resultMs=2500,minShakeMs=450,timeoutMs=10000}={}){
     Object.assign(this,{choose,revealMs,resultMs,minShakeMs,timeoutMs});this.rounds=0;this.reset()
   }
-  reset(){this.phase='waiting';this.computer=null;this.user=null;this.outcome=null;this.since=0;this.lastHand=null;this.pendingShake=false}
+  reset(){this.phase='waiting';this.computer=null;this.user=null;this.outcome=null;this.since=0;this.lastHand=null}
   update({now,shake=false,recognized=null,handPresent=true}={}){
     if(this.phase==='revealing'&&now-this.since>=this.revealMs){this.phase='result';this.since=now}
     else if(this.phase==='result'){
-      if(shake)this.pendingShake=true
-      if(now-this.since>=this.resultMs){
-        if(this.pendingShake&&handPresent){
-          this.phase='shaking';this.computer=this.choose();this.since=now;this.lastHand=now;this.pendingShake=false
-          return this.snapshot()
-        }
-        this.reset();return this.snapshot()
-      }
+      // Show every outcome for its full duration. Ignore and do not queue shakes.
+      if(now-this.since>=this.resultMs)this.reset()
+      return this.snapshot()
     }
     if(this.phase==='waiting'&&shake){
       this.phase='shaking';this.computer=this.choose();this.since=now;this.lastHand=now

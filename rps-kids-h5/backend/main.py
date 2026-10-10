@@ -33,7 +33,7 @@ frame_sequence = 0
 inference = None
 latest_update = 0.0
 camera_problem = "等待摄像头初始化"
-camera_source = "neck"
+camera_source = "forehead"
 camera_fps = 8
 
 

@@ -39,10 +39,26 @@ test('a stopped but still changing hand is not accepted',()=>{
   }
 })
 
-test('confirmed hands show the outcome after 200ms',()=>{
+test('confirmed hands show the outcome after 120ms',()=>{
   const game=new GameRound({choose:()=> 'peace'})
   game.update({now:0,shake:true})
   assert.equal(game.update({now:1000,recognized:{stable:true,id:'fist'}}).phase,'revealing')
-  assert.equal(game.update({now:1199}).phase,'revealing')
-  assert.equal(game.update({now:1200}).phase,'result')
+  assert.equal(game.update({now:1119}).phase,'revealing')
+  assert.equal(game.update({now:1120}).phase,'result')
+})
+
+test('clear stationary pose confirms within 750ms at 8fps after shaking ends',()=>{
+ const still=new StillRps(),stop=new ShakeStopGate()
+ let answer
+ for(let frame=0;frame<12;frame++){
+  const now=frame*125,landmarks=pose(frame%2?.15:-.15)
+  updateStoppedRecognition(still,stop.update({points:landmarks,now,aspect:16/9}),{landmarks,now,aspect:16/9})
+ }
+ for(let frame=12;frame<=18;frame++){
+  const now=frame*125,landmarks=pose(.15)
+  answer=updateStoppedRecognition(still,stop.update({points:landmarks,now,aspect:16/9}),{landmarks,now,aspect:16/9})
+  if(answer?.stable)break
+ }
+ assert.equal(answer?.stable,true)
+ assert.equal(answer.id,'fist')
 })

@@ -3,7 +3,7 @@ import {ref,computed,onMounted,onBeforeUnmount} from 'vue'
 import GameSprite from './components/GameSprite.vue'
 import {StillRps,rpsScores,updateStoppedRecognition} from './lib/rps.js'
 import {MotionTarget} from './lib/target.js'
-import {GameRound,FistShake,ShakeStopGate,LABELS} from './lib/game.js'
+import {GameRound,HandShake,ShakeStopGate,LABELS} from './lib/game.js'
 import {gameResultData} from './lib/report.js'
 
 const base=import.meta.env.BASE_URL
@@ -19,8 +19,8 @@ const screenMode=query.get('screen')==='1'
 // there by default while retaining D/debug=1 for local troubleshooting.
 const video=ref(null),preview=ref(null),debug=ref(!smartAppMode&&!screenMode&&query.get('debug')!=='0'||query.get('debug')==='1')
 const ready=ref(false),loading=ref(false),message=ref('正在准备摄像头…'),error=ref('')
-const settings=ref({holdMs:250,motionSpeed:1.8,maxDrift:.22,amplitude:.22})
-const engine=new GameRound(),target=new MotionTarget(),still=new StillRps(),shake=new FistShake(),shakeStop=new ShakeStopGate()
+const settings=ref({holdMs:200,motionSpeed:1.8,maxDrift:.22,amplitude:.22})
+const engine=new GameRound(),target=new MotionTarget(),still=new StillRps(),shake=new HandShake(),shakeStop=new ShakeStopGate()
 const round=ref(engine.snapshot()),diagnostic=ref({hands:0,index:-1,ms:0,fps:0,gesture:'—',phase:'等待手部',match:0})
 const motionHint=ref('waiting')
 const recording=ref(false),recordedFrames=ref(0),recordedSeconds=ref(0)
@@ -29,7 +29,7 @@ let stream,inferAbort,session=0,raf=0,timer=0,watchdog=0,busy=false,recognizerRe
 const outcomeText={win:['你赢了！','耶！你是出拳小高手'],lose:['你输了','没关系，再来挑战小汪吧！'],draw:['平局','再来一局吧！']}
 const visibleHands=computed(()=>['revealing','result'].includes(round.value.phase))
 const title=computed(()=>!ready.value?message.value:round.value.phase==='result'?outcomeText[round.value.outcome][0]:round.value.phase==='revealing'?'亮出你的超能力！':round.value.phase==='shaking'?'摇一摇！':'摇摇拳头，来一局！')
-const subtitle=computed(()=>!ready.value?'请稍等，马上就好':round.value.phase==='result'?outcomeText[round.value.outcome][1]:round.value.phase==='revealing'?'看看谁更厉害':round.value.phase==='shaking'?'选好手势，停稳亮出来！':'握拳上下摇一摇，小汪陪你玩')
+const subtitle=computed(()=>!ready.value?'请稍等，马上就好':round.value.phase==='result'?outcomeText[round.value.outcome][1]:round.value.phase==='revealing'?'看看谁更厉害':round.value.phase==='shaking'?'选好手势，停稳亮出来！':'伸出手上下摇一摇，小汪陪你玩')
 const animatePhase=computed(()=>ready.value?round.value.phase:'waiting')
 const phaseNames={moving:'手在移动',settling:'等待停稳',recognized:'已确认',unclear:'手型不明确',no_hand:'等待主手',multiple:'检测到多手'}
 function resetInteraction(){target.reset();still.reset();shake.reset();shakeStop.reset();engine.reset();round.value=engine.snapshot();motionHint.value='waiting'}
@@ -51,6 +51,8 @@ function settingsChanged(){logEvent('settings_changed',`hold=${settings.value.ho
 function finishRecording(reason='manual'){
   if(!recording.value)return
   logEvent('recording_ended',`reason=${reason}`);recording.value=false
+  const st=recordingData.stats
+  if(st)recordingData.lines.push(`# summary frames=${st.frames} no_hand_frames=${st.noHand} no_target_frames=${st.noTarget} sequence_skipped=${st.sequenceSkipped} max_receive_gap_ms=${compact(st.maxGap)} mean_infer_ms=${compact(st.inferSum/Math.max(st.frames,1))} max_infer_ms=${compact(st.maxInfer)} max_age_ms=${compact(st.maxAge)} max_no_hand_ms=${compact(st.maxLost)}`)
   recordingData.lines.push(`# ended=${new Date().toISOString()} duration_ms=${Math.round(performance.now()-recordingData.startedPerf)} reason=${reason}`)
 }
 function stop(){finishRecording('camera_stopped');session++;ready.value=false;loading.value=false;busy=false;recognizerReady=false;cancelAnimationFrame(raf);clearTimeout(timer);clearTimeout(watchdog);inferAbort?.abort();inferAbort=null;stream?.getTracks().forEach(t=>t.stop());stream=null;if(video.value){video.value.srcObject=null;video.value.src=''}resetInteraction()}
@@ -74,13 +76,17 @@ function beginRecording(){
   recordedFrames.value=0;recordedSeconds.value=0
   const startedAt=new Date().toISOString(),camera=stream?.getVideoTracks()[0]?.getSettings()||{}
   recordingData={startedAt,startedPerf:performance.now(),lines:[
-    '# RPS_GESTURE_LOG v1',
+    '# RPS_GESTURE_LOG v2',
     `# started=${startedAt}`,
     `# settings hold_ms=${settings.value.holdMs} motion_speed=${settings.value.motionSpeed} max_drift=${settings.value.maxDrift} shake_amplitude=${settings.value.amplitude}`,
     `# camera width=${camera.width||''} height=${camera.height||''} fps=${camera.frameRate||''} aspect=${camera.aspectRatio||''}`,
     `# browser=${navigator.userAgent.replaceAll('|','/')}`,
     '# F columns: t_ms|infer_ms|hands|selected_index|track_id|target_changed|phase_before|phase_after|motion_hint|shake_trigger|motion_moving|motion_stopped|speed|drift|range|recognized|match|fist_candidates|rps_scores(fist,peace,palm)|model_categories|tracks(id,index,x,y,size,vx,vy,speed,moving)|image_landmarks(x,y,z;.../...hands)|world_landmarks(x,y,z;.../...hands)'
   ]}
+  recordingData.stats={frames:0,noHand:0,noTarget:0,sequenceSkipped:0,maxGap:0,maxInfer:0,maxAge:0,maxLost:0,inferSum:0};recordingData.previous=null;recordingData.lostSince=null;recordingData.image=null
+  recordingData.lines.push('# D columns: t_ms|sequence|receive_interval_ms|capture_interval_ms_est|sequence_skipped|request_ms|decode_ms|age_ms|infer_ms|width|height|detected_hands|selected_index|no_hand_ms|palm_sizes_px|brightness|contrast|edge_energy|quality_age_ms')
+  recordingData.lines.push('# Image metrics use the decoded JPEG preview, not the raw camera. edge_energy is a comparative sharpness measure, not a blur classifier.')
+  if(useServerCamera)fetch(cameraApi('/api/status'),{cache:'no-store'}).then(r=>r.json()).then(status=>{if(recordingData?.startedAt===startedAt)recordingData.lines.push('# backend_status='+JSON.stringify(status))}).catch(e=>logEvent('status_failed',e.message))
   recording.value=true;logEvent('recording_started',`phase=${engine.phase},selected=${target.selected??-1}`)
 }
 function endRecording(){finishRecording('manual')}
@@ -108,8 +114,37 @@ function recordFrame({timestamp,ms,result,index,handScores,fistCandidates,before
   recordingData.lines.push(`F|${fields.join('|')}`)
   recordedFrames.value++
   recordedSeconds.value=(performance.now()-recordingData.startedPerf)/1000
-  if(recordedFrames.value>=4500)finishRecording('frame_limit')
+  if(recordedSeconds.value>=300||recordedFrames.value>=6000)finishRecording(recordedSeconds.value>=300?'time_limit':'frame_limit')
 }
+
+const qualityCanvas=document.createElement('canvas')
+function measureImage(source){
+  if(!recording.value||!recordingData||performance.now()-(recordingData.image?.time||0)<1000)return
+  qualityCanvas.width=160;qualityCanvas.height=90
+  const ctx=qualityCanvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(source,0,0,160,90)
+  const rgba=ctx.getImageData(0,0,160,90).data,gray=new Float32Array(160*90)
+  let sum=0,square=0,edge=0
+  for(let i=0;i<gray.length;i++){const v=.299*rgba[i*4]+.587*rgba[i*4+1]+.114*rgba[i*4+2];gray[i]=v;sum+=v;square+=v*v}
+  for(let y=1;y<89;y++)for(let x=1;x<159;x++){const i=y*160+x;const v=4*gray[i]-gray[i-1]-gray[i+1]-gray[i-160]-gray[i+160];edge+=v*v}
+  const mean=sum/gray.length
+  recordingData.image={time:performance.now(),brightness:mean,contrast:Math.sqrt(Math.max(0,square/gray.length-mean*mean)),edge:edge/(88*158)}
+}
+function recordDiagnostic({result,index,ms,sequence,ageMs,requestMs,decodeMs,width,height}){
+  if(!recording.value)return
+  const rec=recordingData,now=performance.now(),prev=rec.previous,st=rec.stats
+  const gap=prev?now-prev.now:0,skipped=prev&&Number.isFinite(sequence)?Math.max(0,sequence-prev.sequence-1):0
+  const captureGap=prev?gap-(ageMs||0)+(prev.age||0):0
+  const count=result.landmarks.length
+  if(!count){if(rec.lostSince===null){rec.lostSince=now;logEvent('hand_lost')} }
+  else if(rec.lostSince!==null){logEvent('hand_recovered',`duration_ms=${Math.round(now-rec.lostSince)}`);st.maxLost=Math.max(st.maxLost,now-rec.lostSince);rec.lostSince=null}
+  const lost=rec.lostSince===null?0:now-rec.lostSince
+  const sizes=result.landmarks.map(p=>compact(Math.hypot((p[0].x-p[9].x)*(width||frameWidth),(p[0].y-p[9].y)*(height||frameHeight)))).join(',')
+  const q=rec.image||{}
+  rec.lines.push('D|'+[Math.round(now-rec.startedPerf),sequence,compact(gap),compact(captureGap),skipped,compact(requestMs),compact(decodeMs),compact(ageMs),compact(ms),width||frameWidth,height||frameHeight,count,index,Math.round(lost),sizes,compact(q.brightness),compact(q.contrast),compact(q.edge),q.time?Math.round(now-q.time):''].join('|'))
+  st.frames++;st.noHand+=count===0?1:0;st.noTarget+=index<0?1:0;st.sequenceSkipped+=skipped;st.maxGap=Math.max(st.maxGap,gap);st.maxInfer=Math.max(st.maxInfer,ms||0);st.maxAge=Math.max(st.maxAge,ageMs||0);st.maxLost=Math.max(st.maxLost,lost);st.inferSum+=ms||0
+  rec.previous={now,sequence,age:ageMs}
+}
+
 async function start(){
   stop();const token=session;error.value='';loading.value=true;message.value='正在连接摄像头…';lastVideoTime=-1;lastDispatch=0;frameWidth=0;frameHeight=0;lastSequence=-1
   try{
@@ -159,7 +194,7 @@ async function capture(now){
     let response
     if(useServerCamera){
       // On the robot only landmarks are transferred unless diagnostics are open.
-      response=await fetch(cameraApi(`/api/recognition?preview=${debug.value?1:0}`),{cache:'no-store',signal:inferAbort.signal})
+      response=await fetch(cameraApi(`/api/recognition?preview=${debug.value||recording.value?1:0}`),{cache:'no-store',signal:inferAbort.signal})
     }else{
       captureCanvas.width=video.value.videoWidth;captureCanvas.height=video.value.videoHeight
       captureCanvas.getContext('2d').drawImage(video.value,0,0)
@@ -170,24 +205,28 @@ async function capture(now){
     }
     if(!response.ok)throw Error(`Python 识别接口 ${response.status}: ${await response.text()}`)
     const data=await response.json()
+    data.requestMs=performance.now()-now;data.decodeMs=0
     if(token!==session)return
     if(useServerCamera){
-      if(data.sequence===lastSequence){clearTimeout(watchdog);busy=false;return}
+      if(data.sequence===lastSequence){if(recording.value)logEvent('duplicate_frame',`sequence=${data.sequence},age_ms=${data.ageMs}`);clearTimeout(watchdog);busy=false;return}
       if(data.ageMs>1400)throw Error('摄像头识别帧已过期，请重连')
       lastSequence=data.sequence;frameWidth=data.width;frameHeight=data.height
-      if(debug.value&&data.preview){
+      if((debug.value||recording.value)&&data.preview){
+        const decodeStarted=performance.now()
         const bytes=Uint8Array.from(atob(data.preview),c=>c.charCodeAt(0))
         const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}))
         if(token!==session){bitmap.close();return}
+        data.decodeMs=performance.now()-decodeStarted
+        if(recording.value)measureImage(bitmap)
         drawFrame(bitmap);bitmap.close()
       }
     }else drawFrame(captureCanvas)
     clearTimeout(watchdog);busy=false
     if(!ready.value){ready.value=true;loading.value=false}
-    receive({...data,timestamp:useServerCamera?now-data.ageMs:now})
+    receive({...data,timestamp:useServerCamera?performance.now()-data.ageMs-data.decodeMs:now})
   }catch(e){if(token===session)fail(`Python 识别失败：${e.message}`)}
 }
-function receive({result,ms,timestamp}){
+function receive({result,ms,timestamp,...telemetry}){
   const muted=useServerCamera?false:stream?.getVideoTracks()[0]?.muted
   if(document.hidden||muted)return
   lastResult=performance.now();message.value='摄像头已就绪';fpsCount++
@@ -198,18 +237,14 @@ function receive({result,ms,timestamp}){
     return rpsScores(result.gestures[i]||[],result.worldLandmarks?.[i],corrected).scores
   })
   const fistCandidates=handScores.map(score=>score.fist>.18&&score.fist>=score.peace&&score.fist>=score.palm)
-  const index=target.update(result.landmarks,timestamp,aspect,{locked:engine.phase!=='waiting',eligible:fistCandidates,verticalOnly:engine.phase==='waiting'})
+  const index=target.update(result.landmarks,timestamp,aspect,{locked:engine.phase!=='waiting',verticalOnly:engine.phase==='waiting'})
   if(target.changed){logEvent('target_changed',`track=${target.selected},index=${index}`);still.reset();shake.reset();shakeStop.reset();if(engine.phase==='shaking')engine.reset()}
   const p=result.landmarks[index],world=result.worldLandmarks?.[index],categories=result.gestures[index]||[]
   let recognition=null,trigger=false,shakeMotion=null
   const before=engine.phase
   if(before==='waiting'){
-    const scores=handScores[index]||{fist:0,peace:0,palm:0}
-    const isFist=scores.fist>.30&&scores.fist>scores.peace&&scores.fist>scores.palm
-    // MotionTarget has already observed consecutive vertical motion from a
-    // fist-like hand.  Starting here avoids asking the child to perform a
-    // second complete shake after the hand is visibly locked.
-    trigger=target.changed||shake.update({points:p,isFist,now:timestamp,amplitude:settings.value.amplitude})
+    // The selected hand has already shown sustained vertical motion.
+    trigger=target.changed||shake.update({points:p,now:timestamp,amplitude:settings.value.amplitude})
   }else if(before==='shaking'){
     shakeMotion=shakeStop.update({points:p,now:timestamp,aspect,motionSpeed:settings.value.motionSpeed,maxDrift:settings.value.maxDrift})
     recognition=updateStoppedRecognition(still,shakeMotion,{landmarks:p,worldLandmarks:world,categories,now:timestamp,handCount:p?1:0,aspect,...settings.value})
@@ -218,19 +253,16 @@ function receive({result,ms,timestamp}){
     }else{
       motionHint.value=shakeMotion.moving?'moving':'ending'
     }
-  }else if(before==='result'){
-    const scores=handScores[index]||{fist:0,peace:0,palm:0}
-    const isFist=scores.fist>.30&&scores.fist>scores.peace&&scores.fist>scores.palm
-    trigger=shake.update({points:p,isFist,now:timestamp,amplitude:settings.value.amplitude})
   }
   round.value=engine.update({now:timestamp,shake:trigger,recognized:recognition,handPresent:!!p})
   if(before!==round.value.phase)logEvent('phase_changed',`${before}->${round.value.phase}`)
   if(before!=='result'&&round.value.phase==='result')publishGameResult(round.value)
   if(before==='waiting'&&round.value.phase==='shaking'){still.reset();shake.reset();shakeStop.reset();motionHint.value='moving'}
   if(before!=='waiting'&&round.value.phase==='waiting'){target.reset();still.reset();shake.reset();shakeStop.reset();motionHint.value='waiting'}
-  const gamePhase=shakeMotion?.moving?'继续摇拳中':shakeMotion&&!shakeMotion.stopped?'等待摇拳结束':recognition?phaseNames[recognition.phase]:null
-  diagnostic.value={...diagnostic.value,scores:handScores[index]||handScores[0],motion:shakeMotion,hands:result.landmarks.length,index,ms,gesture:recognition?.id?LABELS[recognition.id]||'—':trigger?'摇拳已触发':'—',phase:gamePhase||(p?'主手已锁定，等待摇拳':'上下摇拳来锁定主手'),match:recognition?.matchScore||0,raw:categories,round:round.value}
+  const gamePhase=shakeMotion?.moving?'继续摇手中':shakeMotion&&!shakeMotion.stopped?'等待摇手结束':recognition?phaseNames[recognition.phase]:null
+  diagnostic.value={...diagnostic.value,scores:handScores[index]||handScores[0],motion:shakeMotion,hands:result.landmarks.length,index,ms,gesture:recognition?.id?LABELS[recognition.id]||'—':trigger?'摇手已触发':'—',phase:gamePhase||(p?'主手已锁定，等待摇手':'上下摇手来锁定主手'),match:recognition?.matchScore||0,raw:categories,round:round.value}
   if(elapsed>=1000){diagnostic.value.fps=fpsCount*1000/elapsed;fpsSince=lastResult;fpsCount=0}
+  recordDiagnostic({result,index,ms,...telemetry})
   recordFrame({timestamp,ms,result,index,handScores,fistCandidates,before,after:round.value.phase,trigger,shakeMotion,recognition})
   draw(result.landmarks,index)
 }
@@ -303,11 +335,11 @@ onBeforeUnmount(()=>{cancelAnimationFrame(startupFrame);clearTimeout(startupTime
     <main class="game" :class="[animatePhase,round.phase==='result'?round.outcome:'']">
       <div v-if="round.phase==='result'&&round.outcome!=='draw'" class="sunburst"></div>
       <div class="sky-decor" aria-hidden="true"><span v-for="n in 6" :key="n" class="paw" :style="{'--n':n}">🐾</span><i class="cloud cloud-one"></i><i class="cloud cloud-two"></i><span class="sky-star star-one">✦</span><span class="sky-star star-two">✦</span></div>
-      <section class="status" aria-live="polite"><h1 :key="title"><span>{{title}}</span></h1><p v-if="round.phase==='waiting'">握拳上下摇一摇</p></section>
+      <section class="status" aria-live="polite"><h1 :key="title"><span>{{title}}</span></h1><p v-if="round.phase==='waiting'">伸出手上下摇一摇</p></section>
       <div class="arena">
-        <section class="player computer" :class="{champion:round.phase==='result'&&round.outcome==='lose'}"><div class="player-label"><span class="avatar"><GameSprite kind="dog" label="机器狗"/></span>机器狗</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.computer:'fist'" :label="visibleHands?LABELS[round.computer]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.computer]:round.phase==='shaking'?'摇拳中':'等待'}}</div></section>
+        <section class="player computer" :class="{champion:round.phase==='result'&&round.outcome==='lose'}"><div class="player-label"><span class="avatar"><GameSprite kind="dog" label="机器狗"/></span>机器狗</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.computer:'fist'" :label="visibleHands?LABELS[round.computer]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.computer]:round.phase==='shaking'?'摇手中':'等待'}}</div></section>
         <div class="versus" aria-hidden="true">VS</div>
-        <section class="player human" :class="{champion:round.phase==='result'&&round.outcome==='win'}"><div class="player-label"><span class="you-avatar"><GameSprite kind="boy" label="你"/></span>你</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.user:'fist'" :label="visibleHands?LABELS[round.user]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.user]:round.phase==='shaking'?'停稳出拳':'等待摇拳'}}</div></section>
+        <section class="player human" :class="{champion:round.phase==='result'&&round.outcome==='win'}"><div class="player-label"><span class="you-avatar"><GameSprite kind="boy" label="你"/></span>你</div><div class="hand-orbit"><div class="orbit-ring"></div><div class="hand-sprite"><GameSprite :kind="visibleHands?round.user:'fist'" :label="visibleHands?LABELS[round.user]:'等待出拳'"/></div><span v-if="!visibleHands&&round.phase!=='shaking'" class="question">?</span></div><div class="hand-label">{{visibleHands?LABELS[round.user]:round.phase==='shaking'?'停稳出拳':'等待摇手'}}</div></section>
       </div>
       <div v-if="round.phase==='result'" :key="round.rounds" class="result-effects" role="status">
         <template v-if="round.outcome!=='draw'">
@@ -322,6 +354,6 @@ onBeforeUnmount(()=>{cancelAnimationFrame(startupFrame);clearTimeout(startupTime
     </main>
     <span v-if="previewScene" class="debug-open">动画预览 · 不启用摄像头</span>
     <button v-else-if="!debug&&!screenMode&&!smartAppMode" class="debug-open" @click="debug=true">摄像头调试 · D</button>
-    <aside class="debug-panel" :style="{display: debug ? 'block' : 'none'}"><div class="debug-heading"><strong>摄像头调试 · Python</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志最长记录 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
+    <aside class="debug-panel" :style="{display: debug ? 'block' : 'none'}"><div class="debug-heading"><strong>摄像头调试 · Python</strong><button @click="debug=false" aria-label="隐藏调试窗口">×</button></div><canvas ref="preview" aria-label="镜像摄像头和手部关节"></canvas><div class="debug-metrics">{{diagnostic.ms.toFixed(0)}} ms · {{diagnostic.fps.toFixed(1)}} FPS · {{diagnostic.hands}} 只手</div><p>{{diagnostic.phase}} · {{diagnostic.gesture}}</p><small>黄色：本轮主手 · 蓝色：其他检测手</small><div class="score-grid" v-if="diagnostic.scores"><span v-for="(value,id) in diagnostic.scores" :key="id">{{LABELS[id]}}<b>{{Math.round(value*100)}}%</b></span></div><small v-if="diagnostic.motion">掌部速度 {{diagnostic.motion.speed?.toFixed(2) || '—'}} · 位移 {{diagnostic.motion.range?.toFixed(2) || '—'}}</small><label>停稳时间 <b>{{settings.holdMs}} ms</b></label><el-slider v-model="settings.holdMs" :min="200" :max="800" :step="50" @change="settingsChanged" aria-label="停稳时间"/><label>移动速度阈值 <b>{{settings.motionSpeed.toFixed(1)}}</b></label><el-slider v-model="settings.motionSpeed" :min=".8" :max="3.5" :step=".1" @change="settingsChanged" aria-label="移动速度阈值"/><label>累计位移阈值 <b>{{settings.maxDrift.toFixed(2)}}</b></label><el-slider v-model="settings.maxDrift" :min=".08" :max=".4" :step=".01" @change="settingsChanged" aria-label="累计位移阈值"/><label>摇拳幅度 <b>{{settings.amplitude.toFixed(2)}} 掌长</b></label><el-slider v-model="settings.amplitude" :min=".12" :max=".5" :step=".02" @change="settingsChanged" aria-label="摇拳幅度"/><div class="record-status" :class="{active:recording}"><i></i><span>{{recording?`记录中 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:recordedFrames?`已结束 · ${recordedFrames} 帧 · ${recordedSeconds.toFixed(1)} 秒`:'尚未记录'}}</span></div><div class="record-actions"><el-button size="small" type="primary" @click="beginRecording" :disabled="!ready||recording">开始记录</el-button><el-button size="small" @click="endRecording" :disabled="!recording">结束记录</el-button><el-button size="small" @click="exportRecording" :disabled="recording||!recordedFrames">导出日志</el-button></div><div class="debug-actions"><el-button size="small" @click="start" :loading="loading">重连相机</el-button><el-button size="small" @click="closeCamera">关闭相机</el-button></div><small>日志含丢手、帧率与图像质量 · 最长 5 分钟 · D 显示/隐藏 · F 全屏 · R 重连</small></aside>
   </div>
 </template>
