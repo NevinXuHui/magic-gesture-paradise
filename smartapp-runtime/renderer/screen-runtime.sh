@@ -73,6 +73,15 @@ fi
 rm -f "$FIFO_PATH" "$EXPRESSION_READY_FILE" "/tmp/.X${DISPLAY_NUMBER}-lock"
 mkfifo "$FIFO_PATH"
 chmod 0600 "$FIFO_PATH"
+# Let ROS discovery overlap both Xvfb and Electron startup.
+(
+  if "$RENDERER_DIR/disable-expression.sh"; then
+    : >"$EXPRESSION_READY_FILE"
+  else
+    echo '关闭表情失败，不接管屏幕' >&2
+  fi
+) &
+EXPRESSION_PID=$!
 "$XVFB_BIN" "$SCREEN_DISPLAY" -screen 0 802x482x24 -nolisten tcp -ac \
   >"$SCREEN_RUNTIME_DIR/xvfb.log" 2>&1 &
 XVFB_PID=$!
@@ -82,11 +91,6 @@ for _ in {1..100}; do
 done
 [[ -e "/tmp/.X11-unix/X${DISPLAY_NUMBER}" ]] || { echo 'Xvfb 启动失败' >&2; exit 1; }
 
-(
-  "$RENDERER_DIR/disable-expression.sh" >/dev/null 2>&1 || true
-  : >"$EXPRESSION_READY_FILE"
-) &
-EXPRESSION_PID=$!
 export DISPLAY="$SCREEN_DISPLAY" SCREEN_URL SCREEN_FPS SCREEN_FIFO="$FIFO_PATH"
 export FFMPEG_BIN MPV_SOCKET EXPRESSION_READY_FILE
 export MESA_GL_VERSION_OVERRIDE=3.3 MESA_GLSL_VERSION_OVERRIDE=330

@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+RENDERER_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [[ "${1:-}" != "--serve" ]]; then
+  # The warm daemon needs no ROS imports or environment setup in this client.
+  if /usr/bin/python3 "$RENDERER_DIR/expression-control.py" request; then
+    exit 0
+  else
+    status=$?
+    [[ "$status" == 2 ]] || exit "$status"
+  fi
+fi
+
 [[ -f /opt/ros/foxy/setup.bash ]] || exit 0
 [[ -f /usr/bin/cmcc_robot/install/setup.bash ]] || exit 0
 
@@ -15,8 +26,7 @@ set -u
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-2}"
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces><NetworkInterface name="eth0" priority="default" multicast="default" /></Interfaces><AllowMulticast>spdp</AllowMulticast></General></Domain></CycloneDDS>'
-timeout 8 ros2 service call \
-  /expression/config \
-  homi_speech_interface/srv/ExpressionConfig \
-  "{action: set, default_video: '', default_image: '', expression_enabled: 'false', status_publish_enabled: 'true'}" \
-  >/dev/null
+if [[ "${1:-}" == "--serve" ]]; then
+  exec /usr/bin/python3 "$RENDERER_DIR/expression-control.py" serve
+fi
+exec timeout 8 /usr/bin/python3 "$RENDERER_DIR/expression-control.py" disable

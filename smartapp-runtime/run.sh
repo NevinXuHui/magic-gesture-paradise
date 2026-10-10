@@ -17,8 +17,18 @@ ENGLISH_PACKAGE_SOURCE="$SCRIPT_DIR/../english/build/smartapp/cloud_show_display
 LOCAL_PACKAGE_DIR=''
 PACKAGE_SERVER_PID=''
 PACKAGE_SERVER_LOG=''
+EXPRESSION_CONTROL_PID=''
+RUNTIME_PID=''
 
-cleanup_package_server() {
+cleanup_runtime() {
+    if [ -n "$RUNTIME_PID" ] && kill -0 "$RUNTIME_PID" 2>/dev/null; then
+        kill "$RUNTIME_PID" 2>/dev/null || true
+        wait "$RUNTIME_PID" 2>/dev/null || true
+    fi
+    if [ -n "$EXPRESSION_CONTROL_PID" ] && kill -0 "$EXPRESSION_CONTROL_PID" 2>/dev/null; then
+        kill "$EXPRESSION_CONTROL_PID" 2>/dev/null || true
+        wait "$EXPRESSION_CONTROL_PID" 2>/dev/null || true
+    fi
     if [ -n "$PACKAGE_SERVER_PID" ] && kill -0 "$PACKAGE_SERVER_PID" 2>/dev/null; then
         kill "$PACKAGE_SERVER_PID" 2>/dev/null || true
         wait "$PACKAGE_SERVER_PID" 2>/dev/null || true
@@ -28,7 +38,9 @@ cleanup_package_server() {
     fi
 }
 
-trap cleanup_package_server EXIT
+trap cleanup_runtime EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "=========================================="
 echo "SmartApp Runtime 启动脚本"
@@ -167,6 +179,12 @@ for _ in $(seq 1 50); do
 done
 echo "✓ 本地包服务: https://127.0.0.1:18443"
 
+# Discover the ROS expression service before game launch; do not disable it yet.
+if [ -f /opt/ros/foxy/setup.bash ] && [ -f /usr/bin/cmcc_robot/install/setup.bash ]; then
+    bash "$SCRIPT_DIR/renderer/disable-expression.sh" --serve &
+    EXPRESSION_CONTROL_PID=$!
+fi
+
 # 启动Runtime
 echo ""
 echo "=========================================="
@@ -181,6 +199,8 @@ echo "按 Ctrl+C 停止服务"
 echo "=========================================="
 echo ""
 
-# 前台运行
+# Keep the launcher responsive to signals while retaining foreground lifetime.
 PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PYTHON" -m smartapp_runtime \
-    --config "$CONFIG_FILE"
+    --config "$CONFIG_FILE" &
+RUNTIME_PID=$!
+wait "$RUNTIME_PID"
